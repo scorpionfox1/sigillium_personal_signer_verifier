@@ -1,0 +1,47 @@
+#################################
+# Node / Frontend
+#################################
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+#################################
+# Rust / Cargo
+#################################
+# Rust build artifacts
+/target/
+
+# Backup files
+**/*.rs.bk
+
+#################################
+# Build Output
+#################################
+build/
+
+#################################
+# Editor / IDE
+#################################
+# VS Code (ignore everything except recommended extension list)
+/.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# JetBrains / IntelliJ
+.idea/
+
+#################################
+
+old
+side_table
