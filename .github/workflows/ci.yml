@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: windows-latest
+          - os: macos-15
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Test
+        run: cargo test
+
+      - name: Upload artifact (non-Windows)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigillium-${{ runner.os }}
+          path: target/release/sigillium-psv
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigillium-${{ runner.os }}
+          path: target/release/sigillium-psv.exe

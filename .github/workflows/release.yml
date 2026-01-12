@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: windows-latest
+          - os: macos-15
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Package artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          BIN="sigillium-psv"
+          PKG="sigillium_personal_signer_verifier"
+          TAG="${GITHUB_REF_NAME}"
+          OS="${{ runner.os }}"
+          ARCH="$(uname -m)"
+
+          OUT="${PKG}-${TAG}-${OS}-${ARCH}"
+          cp "target/release/$BIN" "$OUT"
+          tar -czf "$OUT.tar.gz" "$OUT"
+
+      - name: Package artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin  = "sigillium-psv.exe"
+          $pkg  = "sigillium_personal_signer_verifier"
+          $tag  = "${{ github.ref_name }}"
+          $os   = "Windows"
+          $arch = $env:PROCESSOR_ARCHITECTURE
+          if ($arch -eq "AMD64") { $arch = "x86_64" }
+
+          $out = "$pkg-$tag-$os-$arch.exe"
+          Copy-Item "target\release\$bin" $out
+
+      - name: Publish GitHub Release assets (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: |
+            *.tar.gz
+
+      - name: Publish GitHub Release assets (Windows)
+        if: runner.os == 'Windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: |
+            *.exe
