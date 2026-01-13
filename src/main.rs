@@ -32,7 +32,9 @@ fn main() -> eframe::Result<()> {
         .expect("failed to init app state");
     let state = Arc::new(state);
 
-    let ctx = Arc::new(AppCtx::new(app_data_dir.clone()));
+    let mut ctx = AppCtx::new(app_data_dir.clone());
+    keyfile_store::resume_tombstones(&ctx.keyfiles_root());
+    let ctx = Arc::new(ctx);
 
     if let Some(dir) = ctx.keyfile_path.parent() {
         if let Ok(warns) =

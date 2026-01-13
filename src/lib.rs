@@ -8,6 +8,7 @@ pub mod error;
 pub mod fs_hardening;
 pub mod json_canon;
 pub mod keyfile;
+pub mod keyfile_store;
 pub mod platform;
 pub mod security_log;
 pub mod types;
