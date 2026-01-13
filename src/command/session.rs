@@ -22,13 +22,17 @@ pub fn select_active_key(
     state: &AppState,
     ctx: &AppCtx,
 ) -> (crate::types::KeyfileState, AppResult<()>) {
-    if ctx.keyfile_path.to_str().is_none() {
-        let ks = refresh_keyfile_state(state, ctx).unwrap_or(crate::types::KeyfileState::Corrupted);
-        return (ks, Err(AppError::InvalidPath));
-    }
+    let keyfile_path = match ctx.current_keyfile_path() {
+        Some(p) => p,
+        None => {
+            let ks =
+                refresh_keyfile_state(state, ctx).unwrap_or(crate::types::KeyfileState::Corrupted);
+            return (ks, Err(AppError::Msg("No keyfile selected".into())));
+        }
+    };
 
     let key_res = with_master_key(state, |mk| {
-        keyfile::decrypt_key_material(&ctx.keyfile_path, &*mk, key_id)
+        keyfile::decrypt_key_material(&keyfile_path, &*mk, key_id)
     });
 
     let (privk, associated_s) = match key_res {
@@ -114,7 +118,11 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
     let passphrase = Zeroizing::new(passphrase.to_owned());
     super::validate_passphrase_for_unlock(&passphrase).map_err(AppError::Msg)?;
 
-    let master_key = match keyfile::read_master_key(&ctx.keyfile_path, &passphrase) {
+    let keyfile_path = ctx
+        .current_keyfile_path()
+        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+
+    let master_key = match keyfile::read_master_key(&keyfile_path, &passphrase) {
         Ok(k) => k,
         Err(e) => {
             thread::sleep(Duration::from_millis(250));
@@ -123,8 +131,8 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
     };
 
     // Validate integrity. Any failure is treated as tamper/corruption.
-    if let Err(e) = keyfile::validate_keyfile_structure_on_disk(&ctx.keyfile_path)
-        .and_then(|_| keyfile::verify_keyfile_mac_on_disk(&ctx.keyfile_path, &master_key))
+    if let Err(e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path)
+        .and_then(|_| keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key))
     {
         lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppError::Msg)?;
         let _ = refresh_keyfile_state(state, ctx)?;

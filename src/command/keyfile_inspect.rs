@@ -8,7 +8,11 @@ use crate::{
 };
 
 pub fn refresh_keyfile_state(state: &AppState, ctx: &AppCtx) -> AppResult<KeyfileState> {
-    let ks = match check_keyfile_state(&ctx.keyfile_path) {
+    let keyfile_path = ctx
+        .current_keyfile_path()
+        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+
+    let ks = match check_keyfile_state(&keyfile_path) {
         Ok(ks) => ks,
         Err(_e) => KeyfileState::Corrupted,
     };
@@ -30,6 +34,19 @@ mod tests {
     use super::*;
     use crate::types::KeyfileState;
     use crate::{context::AppCtx, types::AppState};
+    use std::fs;
+
+    const FIXED_KEYFILE_NAME: &str = "sigillium.keyfile.json";
+
+    fn mk_ctx_with_empty_dir(root: &std::path::Path, name: &str) -> (AppCtx, std::path::PathBuf) {
+        let kdir = root.join("keyfiles").join(name);
+        fs::create_dir_all(&kdir).expect("mkdir keyfile dir");
+
+        let mut ctx = AppCtx::new(root.to_path_buf());
+        ctx.selected_keyfile_dir = Some(kdir.clone());
+
+        (ctx, kdir)
+    }
 
     #[test]
     fn refresh_keyfile_state_reports_missing_when_no_keyfile_exists() {
@@ -37,12 +54,12 @@ mod tests {
         let td_keyfile = tempfile::tempdir().expect("tempdir keyfile");
 
         let state = AppState::new_for_tests(td_state.path()).expect("init_state");
-        let ctx = AppCtx::new(td_keyfile.path().to_path_buf());
+        let (ctx, kdir) = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
 
         // Ensure file truly doesn't exist.
         assert!(
-            !ctx.keyfile_path.exists(),
-            "test assumes keyfile_path does not exist"
+            !kdir.join(FIXED_KEYFILE_NAME).exists(),
+            "test assumes keyfile.json does not exist"
         );
 
         let ks = refresh_keyfile_state(&state, &ctx).expect("refresh_keyfile_state");
@@ -59,9 +76,10 @@ mod tests {
         // Create a valid keyfile using existing test fixture helpers.
         let fx = crate::keyfile::ops::test_support::mk_fixture("passphrase").expect("mk_fixture");
 
-        let mut ctx = AppCtx::new(td_keyfile.path().to_path_buf());
-        ctx.keyfile_path = fx.path.clone();
-        assert!(ctx.keyfile_path.exists());
+        let (ctx, kdir) = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
+        let dst = kdir.join(FIXED_KEYFILE_NAME);
+        fs::copy(&fx.path, &dst).expect("copy fixture keyfile");
+        assert!(dst.exists());
 
         let ks = refresh_keyfile_state(&state, &ctx).expect("refresh_keyfile_state");
         assert_eq!(ks, KeyfileState::NotCorrupted);

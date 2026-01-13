@@ -30,8 +30,12 @@ pub(super) fn validate_passphrase(pass: &str) -> Result<(), String> {
 }
 
 pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
+    let keyfile_path = ctx
+        .current_keyfile_path()
+        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+
     let metas = crate::command_state::with_master_key(state, |k| {
-        keyfile::list_key_meta(&ctx.keyfile_path, &*k)
+        keyfile::list_key_meta(&keyfile_path, &*k)
     })?;
 
     let mut keys = state
