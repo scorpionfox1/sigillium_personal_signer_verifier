@@ -47,14 +47,12 @@ pub(crate) fn read_json(path: &Path) -> AppResult<KeyfileData> {
 }
 
 pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
-    let json = serde_json::to_vec_pretty(data)
-        .map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
-
     let parent = path
         .parent()
         .ok_or_else(|| AppError::KeyfileFsWriteFailed("invalid keyfile path".to_string()))?;
 
-    fs::create_dir_all(parent).map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
+    let json = serde_json::to_vec_pretty(data)
+        .map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
 
     let mut rnd = [0u8; 12];
     OsRng.fill_bytes(&mut rnd);
@@ -97,8 +95,6 @@ pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
     }
 
     write_res?;
-
-    let _ = crate::platform::fsync_dir_best_effort(parent);
 
     Ok(())
 }
@@ -161,6 +157,7 @@ mod tests {
     use crate::context::APP_ID;
     use crate::error::AppError;
     use crate::keyfile::types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION};
+    use crate::keyfile::KEYFILE_FILENAME;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -202,7 +199,7 @@ mod tests {
     #[test]
     fn write_then_read_roundtrip_ok() {
         let dir = mk_temp_dir("io_roundtrip");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         let data = mk_min_keyfile_data();
         write_json(&path, &data).unwrap();
@@ -218,7 +215,7 @@ mod tests {
     #[test]
     fn read_rejects_unsupported_version() {
         let dir = mk_temp_dir("io_bad_version");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         let mut data = mk_min_keyfile_data();
         data.version = KEYFILE_VERSION + 1;
@@ -232,7 +229,7 @@ mod tests {
     #[test]
     fn read_rejects_marker_mismatch() {
         let dir = mk_temp_dir("io_marker_mismatch");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         let mut data = mk_min_keyfile_data();
         data.format = "not-the-format".to_string();
@@ -246,7 +243,7 @@ mod tests {
     #[test]
     fn read_rejects_too_large_file() {
         let dir = mk_temp_dir("io_too_large");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         // KEYFILE_MAX_BYTES is 1 MiB in the module under test.
         let too_big = (1 * 1024 * 1024) + 1;
@@ -260,7 +257,7 @@ mod tests {
     #[test]
     fn write_json_replaces_existing_file_atomically_from_callers_pov() {
         let dir = mk_temp_dir("io_replace");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         let mut data1 = mk_min_keyfile_data();
         data1.salt = "BBBBBBBBBBBBBBBBBBBBBB==".to_string();
@@ -300,7 +297,7 @@ mod tests {
     #[test]
     fn backup_keyfile_moves_to_corrupt_prefix() {
         let dir = mk_temp_dir("io_backup_basic");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         fs::write(&path, b"hello").unwrap();
         assert!(path.exists());
@@ -317,7 +314,7 @@ mod tests {
     #[test]
     fn backup_keyfile_uses_increment_suffix_on_collision() {
         let dir = mk_temp_dir("io_backup_collision");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         // Pre-create the first candidate so it collides.
         let colliding = dir.join("corrupt.keyfile.json");
@@ -337,7 +334,7 @@ mod tests {
     #[test]
     fn backup_keyfile_errors_if_missing() {
         let dir = mk_temp_dir("io_backup_missing");
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         let err = backup_keyfile_with_corrupt_prefix(&path).unwrap_err();
         assert!(matches!(err, AppError::KeyfileMissingOrCorrupted));

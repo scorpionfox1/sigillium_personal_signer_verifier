@@ -98,6 +98,7 @@ pub fn lock_app_inner(state: &AppState, context: &str) -> Result<(), String> {
         let mut session = lock_session(state).map_err(app_err_to_string)?;
         session.unlocked = false;
         session.active_key_id = None;
+        session.active_associated_key_id = None;
     }
 
     // Refactored to use plural failure logging
@@ -127,6 +128,15 @@ pub fn lock_app_inner_if_unlocked(state: &AppState, context: &str) -> Result<(),
     }
 
     Ok(())
+}
+
+// ======================================================
+// secure shutdown (best-effort)
+// ======================================================
+
+pub fn secure_shutdown_best_effort(state: &AppState, context: &str) -> Result<(), String> {
+    // Always attempt to clear secrets/session/keys, even if already locked.
+    lock_app_inner(state, context)
 }
 
 // ======================================================
@@ -164,6 +174,7 @@ mod tests {
             let mut session = state.session.lock().unwrap();
             session.unlocked = true;
             session.active_key_id = active.map(|_| 1);
+            session.active_associated_key_id = active.map(|_| "assoc-123".to_string());
         }
 
         state
@@ -214,6 +225,7 @@ mod tests {
         let session = state.session.lock().unwrap();
         assert!(!session.unlocked);
         assert!(session.active_key_id.is_none());
+        assert!(session.active_associated_key_id.is_none());
         assert!(state.keys.lock().unwrap().is_empty());
     }
 
@@ -227,6 +239,7 @@ mod tests {
         let session = state.session.lock().unwrap();
         assert!(!session.unlocked);
         assert!(session.active_key_id.is_none());
+        assert!(session.active_associated_key_id.is_none());
     }
 
     #[test]
@@ -239,5 +252,27 @@ mod tests {
         let session = state.session.lock().unwrap();
         assert!(!session.unlocked);
         assert!(session.active_key_id.is_none());
+        assert!(session.active_associated_key_id.is_none());
+    }
+
+        #[test]
+    fn secure_shutdown_best_effort_clears_everything_even_if_locked() {
+        let state = mk_state_locked();
+
+        // Simulate stale session data (should still be cleared)
+        {
+            let mut session = state.session.lock().unwrap();
+            session.active_key_id = Some(1);
+            session.active_associated_key_id = Some("assoc-123".to_string());
+        }
+
+        secure_shutdown_best_effort(&state, "test").unwrap();
+
+        assert!(state.secrets.lock().unwrap().is_none());
+        let session = state.session.lock().unwrap();
+        assert!(!session.unlocked);
+        assert!(session.active_key_id.is_none());
+        assert!(session.active_associated_key_id.is_none());
+        assert!(state.keys.lock().unwrap().is_empty());
     }
 }

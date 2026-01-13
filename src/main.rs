@@ -8,7 +8,6 @@ mod ui;
 use directories::ProjectDirs;
 use sigillum_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
 use sigillum_personal_signer_verifier_lib::fs_hardening;
-use sigillum_personal_signer_verifier_lib::keyfile_store;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,7 +32,6 @@ fn main() -> eframe::Result<()> {
     let state = Arc::new(state);
 
     let ctx = AppCtx::new(app_data_dir.clone());
-    keyfile_store::resume_tombstones(&ctx.keyfiles_root());
     let ctx = Arc::new(ctx);
 
     fs_hardening::startup_hardening_best_effort(state.as_ref(), ctx.as_ref());

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::{append_key, read_master_key, write_blank_keyfile};
-use crate::error::AppResult;
+use crate::{error::AppResult, keyfile::KEYFILE_FILENAME};
 
 pub struct OpsFixture {
     pub dir: PathBuf,
@@ -23,7 +23,7 @@ pub fn mk_fixture(passphrase: &str) -> AppResult<OpsFixture> {
     let dir = std::env::temp_dir().join(format!("sigillium_ops_test_{}", hex::encode(rnd)));
     fs::create_dir_all(&dir).unwrap();
 
-    let path = dir.join("keyfile.json");
+    let path = dir.join(KEYFILE_FILENAME);
 
     write_blank_keyfile(&path)?;
     let master_key = read_master_key(&path, passphrase)?;

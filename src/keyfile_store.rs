@@ -1,9 +1,8 @@
-use std::fs;
+// src/keyfile_store.rs
+
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-
-use crate::platform::secure_delete_best_effort;
+use crate::{keyfile::KEYFILE_FILENAME, platform::secure_delete_best_effort};
 
 #[derive(Debug, Clone)]
 pub struct KeyfileListing {
@@ -11,49 +10,89 @@ pub struct KeyfileListing {
     pub dir: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KeyfileMeta {
-    pub name: String,
-    pub label: Option<String>,
-    pub created_at: i64,
-    pub last_used: Option<i64>,
-}
-
-const META_FILE: &str = "meta.json";
 const TOMBSTONE_FILE: &str = "TOMBSTONE";
 
-pub fn list_keyfiles(keyfiles_root: &Path) -> Vec<KeyfileListing> {
+// ------------------------------------------------------
+// Store wrapper (preferred entry point)
+// ------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct KeyfileStore {
+    root: PathBuf,
+}
+
+impl KeyfileStore {
+    pub fn new(root: PathBuf) -> Self {
+        Self { root }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn list_keyfiles(&self) -> std::io::Result<Vec<String>> {
+        list_keyfiles(&self.root)
+    }
+
+    pub fn keyfile_name_exists(&self, name: &str) -> bool {
+        keyfile_name_exists(&self.root, name)
+    }
+
+    pub fn create_keyfile_dir(&self, name: &str) -> std::io::Result<PathBuf> {
+        create_keyfile_dir(&self.root, name)
+    }
+
+    pub fn rename_keyfile_dir(&self, from: &str, to: &str) -> std::io::Result<PathBuf> {
+        rename_keyfile_dir(&self.root, from, to)
+    }
+
+    pub fn destroy_keyfile_dir_by_name_best_effort(&self, name: &str) {
+        // best-effort by design
+        if validate_keyfile_name(name).is_err() {
+            return;
+        }
+        let dir = self.root.join(name);
+        destroy_keyfile_dir_best_effort(&dir);
+    }
+}
+
+// ------------------------------------------------------
+// Listing / validation / resolution
+// ------------------------------------------------------
+
+pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
     let mut out = Vec::new();
 
-    let Ok(entries) = fs::read_dir(keyfiles_root) else {
-        return out;
-    };
+    if !keyfiles_root.exists() {
+        return Ok(out);
+    }
 
-    for entry in entries.flatten() {
+    for entry in std::fs::read_dir(keyfiles_root)? {
+        let entry = entry?;
         let dir = entry.path();
+
         if !dir.is_dir() {
             continue;
         }
 
-        let keyfile_path = dir.join("sigillium.keyfile.json");
-        if !keyfile_path.is_file() {
+        // Tombstoned dirs are garbage-collected opportunistically.
+        if dir.join(TOMBSTONE_FILE).exists() {
+            destroy_keyfile_dir_best_effort(&dir);
             continue;
         }
 
-        let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-
-        out.push(KeyfileListing {
-            name: name.to_string(),
-            dir,
-        });
+        if dir.join(KEYFILE_FILENAME).is_file() {
+            if let Some(name) = dir.file_name().and_then(|s| s.to_str()) {
+                out.push(name.to_string());
+            }
+        }
     }
 
-    out
+    out.sort();
+    Ok(out)
 }
 
-pub fn validate_keyfile_name(name: &str) -> Result<(), &'static str> {
+fn validate_keyfile_name(name: &str) -> Result<(), &'static str> {
     if name.is_empty() {
         return Err("empty");
     }
@@ -62,47 +101,120 @@ pub fn validate_keyfile_name(name: &str) -> Result<(), &'static str> {
         return Err("reserved");
     }
 
+    // Disallow path separators and NUL.
     if name.bytes().any(|b| b == b'/' || b == b'\\' || b == 0) {
         return Err("invalid_char");
+    }
+
+    // Reject ASCII control chars (0x00-0x1F) and DEL (0x7F).
+    if name.bytes().any(|b| b < 0x20 || b == 0x7f) {
+        return Err("invalid_char");
+    }
+
+    // Reject Windows-forbidden filename characters.
+    if name
+        .chars()
+        .any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+    {
+        return Err("invalid_char");
+    }
+
+    // Windows disallows trailing dots/spaces in path components.
+    if name.ends_with('.') || name.ends_with(' ') {
+        return Err("invalid_char");
+    }
+
+    // Reject Windows reserved device names (case-insensitive), including with an extension.
+    let base = name.split('.').next().unwrap_or(name);
+    let upper = base.to_ascii_uppercase();
+    let reserved = matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (upper.starts_with("COM")
+            && upper.len() == 4
+            && matches!(upper.as_bytes()[3], b'1'..=b'9'))
+        || (upper.starts_with("LPT")
+            && upper.len() == 4
+            && matches!(upper.as_bytes()[3], b'1'..=b'9'));
+    if reserved {
+        return Err("reserved");
     }
 
     Ok(())
 }
 
 pub fn keyfile_name_exists(keyfiles_root: &Path, name: &str) -> bool {
-    keyfiles_root.join(name).is_dir()
+    keyfiles_root.join(name).join(KEYFILE_FILENAME).is_file()
 }
 
-pub fn read_keyfile_meta(dir: &Path) -> Option<KeyfileMeta> {
-    let path = dir.join(META_FILE);
-    let data = std::fs::read(path).ok()?;
-    serde_json::from_slice(&data).ok()
-}
+// ------------------------------------------------------
+// Directory ops (create / rename / delete + tombstone)
+// ------------------------------------------------------
 
-pub fn write_keyfile_meta(dir: &Path, meta: &KeyfileMeta) -> std::io::Result<()> {
-    let path = dir.join(META_FILE);
-    let data = serde_json::to_vec_pretty(meta)?;
-    std::fs::write(path, data)
-}
-
-pub fn create_keyfile_dir(
-    keyfiles_root: &Path,
-    name: &str,
-    meta: &KeyfileMeta,
-) -> std::io::Result<PathBuf> {
+pub fn create_keyfile_dir(keyfiles_root: &Path, name: &str) -> std::io::Result<PathBuf> {
     validate_keyfile_name(name)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
+    // Ensure root exists (store owns directory ops).
+    std::fs::create_dir_all(keyfiles_root)?;
+
     let dir = keyfiles_root.join(name);
 
+    if dir.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "keyfile name exists",
+        ));
+    }
+
     std::fs::create_dir(&dir)?;
-
-    write_keyfile_meta(&dir, meta)?;
-
     Ok(dir)
 }
 
-fn write_tombstone(dir: &Path) {
+pub fn rename_keyfile_dir(keyfiles_root: &Path, from: &str, to: &str) -> std::io::Result<PathBuf> {
+    validate_keyfile_name(from)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid from"))?;
+    validate_keyfile_name(to)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid to"))?;
+
+    std::fs::create_dir_all(keyfiles_root)?;
+
+    let from_dir = keyfiles_root.join(from);
+    let to_dir = keyfiles_root.join(to);
+
+    if !from_dir.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "from missing",
+        ));
+    }
+
+    // If it's tombstoned, treat as not found.
+    if from_dir.join(TOMBSTONE_FILE).exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "from tombstoned",
+        ));
+    }
+
+    // Must be a valid keyfile directory.
+    if !from_dir.join(KEYFILE_FILENAME).is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "from is not a keyfile dir",
+        ));
+    }
+
+    if to_dir.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "to exists",
+        ));
+    }
+
+    std::fs::rename(&from_dir, &to_dir)?;
+    Ok(to_dir)
+}
+
+fn write_tombstone_best_effort(dir: &Path) {
     let _ = std::fs::write(dir.join(TOMBSTONE_FILE), b"");
 }
 
@@ -128,92 +240,137 @@ fn destroy_dir_contents_best_effort(dir: &Path) {
     }
 }
 
-pub fn destroy_keyfile_dir(dir: &Path) {
-    write_tombstone(dir);
+pub fn destroy_keyfile_dir_best_effort(dir: &Path) {
+    // best-effort: never propagate errors
+    write_tombstone_best_effort(dir);
     destroy_dir_contents_best_effort(dir);
     let _ = std::fs::remove_file(dir.join(TOMBSTONE_FILE));
     let _ = std::fs::remove_dir(dir);
 }
 
-pub fn resume_tombstones(keyfiles_root: &Path) {
-    let Ok(entries) = std::fs::read_dir(keyfiles_root) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let dir = entry.path();
-        if !dir.is_dir() {
-            continue;
-        }
-
-        if dir.join(TOMBSTONE_FILE).exists() {
-            destroy_keyfile_dir(&dir);
-        }
-    }
-}
+// ------------------------------------------------------
+// Unit Tests
+// ------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use tempfile::tempdir;
 
-    #[test]
-    fn list_keyfiles_ignores_dirs_missing_keyfile_json() {
-        let td = tempfile::tempdir().expect("tempdir");
-        let root = td.path().join("keyfiles");
-        fs::create_dir_all(&root).expect("mkdir keyfiles root");
-
-        // selectable
-        let a = root.join("a");
-        fs::create_dir_all(&a).expect("mkdir a");
-        fs::write(a.join("sigillium.keyfile.json"), b"{}").expect("write keyfile");
-
-        // non-selectable (missing keyfile.json)
-        let b = root.join("b");
-        fs::create_dir_all(&b).expect("mkdir b");
-
-        let items = list_keyfiles(&root);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].name, "a");
-        assert_eq!(items[0].dir, a);
+    fn touch(p: &Path) {
+        std::fs::write(p, b"x").unwrap();
     }
 
     #[test]
-    fn destroy_keyfile_dir_removes_dir() {
-        let td = tempfile::tempdir().expect("tempdir");
-        let dir = td.path().join("k1");
-        fs::create_dir_all(&dir).expect("mkdir");
-
-        fs::write(dir.join("sigillium.keyfile.json"), b"{}").expect("write keyfile");
-        fs::write(dir.join("meta.json"), b"{}").expect("write meta");
-
-        let nested = dir.join("nested");
-        fs::create_dir_all(&nested).expect("mkdir nested");
-        fs::write(nested.join("x.txt"), b"hi").expect("write nested file");
-
-        destroy_keyfile_dir(&dir);
-
-        assert!(!dir.exists());
+    fn validate_keyfile_name_rejects_empty_and_reserved() {
+        assert_eq!(validate_keyfile_name(""), Err("empty"));
+        assert_eq!(validate_keyfile_name("."), Err("reserved"));
+        assert_eq!(validate_keyfile_name(".."), Err("reserved"));
     }
 
     #[test]
-    fn resume_tombstones_removes_only_tombstoned_dirs() {
-        let td = tempfile::tempdir().expect("tempdir");
+    fn validate_keyfile_name_rejects_separators_and_nul() {
+        assert_eq!(validate_keyfile_name("a/b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a\\b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a\0b"), Err("invalid_char"));
+    }
+
+    #[test]
+    fn create_keyfile_dir_creates_root_and_dir() {
+        let td = tempdir().unwrap();
         let root = td.path().join("keyfiles");
-        fs::create_dir_all(&root).expect("mkdir keyfiles root");
+        assert!(!root.exists());
 
-        let dead = root.join("dead");
-        fs::create_dir_all(&dead).expect("mkdir dead");
-        fs::write(dead.join("sigillium.keyfile.json"), b"{}").expect("write keyfile");
-        fs::write(dead.join(TOMBSTONE_FILE), b"").expect("write tombstone");
+        let dir = create_keyfile_dir(&root, "alpha").unwrap();
+        assert!(root.is_dir());
+        assert!(dir.is_dir());
+        assert_eq!(dir, root.join("alpha"));
 
-        let alive = root.join("alive");
-        fs::create_dir_all(&alive).expect("mkdir alive");
-        fs::write(alive.join("sigillium.keyfile.json"), b"{}").expect("write keyfile");
+        // duplicate
+        let e = create_keyfile_dir(&root, "alpha").unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+    }
 
-        resume_tombstones(&root);
+    #[test]
+    fn list_keyfiles_only_returns_dirs_with_keyfile_json_sorted() {
+        let td = tempdir().unwrap();
+        let root = td.path();
 
-        assert!(!dead.exists());
-        assert!(alive.exists());
+        // non-dir entry
+        touch(&root.join("notadir"));
+
+        // valid keyfile dirs
+        let a = root.join("b");
+        let b = root.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        touch(&a.join(KEYFILE_FILENAME));
+        touch(&b.join(KEYFILE_FILENAME));
+
+        // dir without keyfile.json
+        let c = root.join("c");
+        std::fs::create_dir_all(&c).unwrap();
+
+        let got = list_keyfiles(root).unwrap();
+        assert_eq!(got, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn list_keyfiles_garbage_collects_tombstoned_dirs() {
+        let td = tempdir().unwrap();
+        let root = td.path();
+
+        let doomed = root.join("doomed");
+        std::fs::create_dir_all(&doomed).unwrap();
+        touch(&doomed.join(TOMBSTONE_FILE));
+        touch(&doomed.join(KEYFILE_FILENAME)); // even if present, tombstone wins
+
+        let got = list_keyfiles(root).unwrap();
+        assert!(got.is_empty());
+
+        // best-effort: likely removed
+        assert!(!doomed.exists());
+    }
+
+    #[test]
+    fn rename_keyfile_dir_renames_and_preserves_keyfile_json() {
+        let td = tempdir().unwrap();
+        let root = td.path().join("keyfiles");
+
+        let from = create_keyfile_dir(&root, "from").unwrap();
+        touch(&from.join(KEYFILE_FILENAME));
+
+        let to = rename_keyfile_dir(&root, "from", "to").unwrap();
+        assert!(!from.exists());
+        assert!(to.is_dir());
+        assert!(to.join(KEYFILE_FILENAME).is_file());
+
+        // rename to existing should fail
+        let other = create_keyfile_dir(&root, "other").unwrap();
+        touch(&other.join(KEYFILE_FILENAME));
+        let e = rename_keyfile_dir(&root, "to", "other").unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn validate_keyfile_name_rejects_windows_forbidden_chars_and_trailing() {
+        assert_eq!(validate_keyfile_name("a:b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a*b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a?b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a|b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a<b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a>b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("a\"b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("trail."), Err("invalid_char"));
+        assert_eq!(validate_keyfile_name("trail "), Err("invalid_char"));
+    }
+
+    #[test]
+    fn validate_keyfile_name_rejects_windows_device_names() {
+        for n in [
+            "con", "CON", "con.txt", "prn", "aux", "nul", "com1", "COM9.log", "lpt1", "LPT9.txt",
+        ] {
+            assert_eq!(validate_keyfile_name(n), Err("reserved"), "name: {n}");
+        }
     }
 }
