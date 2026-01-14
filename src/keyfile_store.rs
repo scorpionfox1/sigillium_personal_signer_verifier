@@ -2,7 +2,11 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{keyfile::KEYFILE_FILENAME, platform::secure_delete_best_effort};
+use crate::{
+    error::{AppError, AppResult},
+    keyfile::KEYFILE_FILENAME,
+    platform::secure_delete_best_effort,
+};
 
 #[derive(Debug, Clone)]
 pub struct KeyfileListing {
@@ -38,17 +42,13 @@ impl KeyfileStore {
         keyfile_name_exists(&self.root, name)
     }
 
-    pub fn create_keyfile_dir(&self, name: &str) -> std::io::Result<PathBuf> {
+    pub fn create_keyfile_dir(&self, name: &str) -> AppResult<PathBuf> {
         create_keyfile_dir(&self.root, name)
-    }
-
-    pub fn rename_keyfile_dir(&self, from: &str, to: &str) -> std::io::Result<PathBuf> {
-        rename_keyfile_dir(&self.root, from, to)
     }
 
     pub fn destroy_keyfile_dir_by_name_best_effort(&self, name: &str) {
         // best-effort by design
-        if validate_keyfile_name(name).is_err() {
+        if validate_keyfile_dir_name(name).is_err() {
             return;
         }
         let dir = self.root.join(name);
@@ -92,7 +92,7 @@ pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
     Ok(out)
 }
 
-fn validate_keyfile_name(name: &str) -> Result<(), &'static str> {
+fn validate_keyfile_dir_name(name: &str) -> Result<(), &'static str> {
     if name.is_empty() {
         return Err("empty");
     }
@@ -146,12 +146,11 @@ pub fn keyfile_name_exists(keyfiles_root: &Path, name: &str) -> bool {
 }
 
 // ------------------------------------------------------
-// Directory ops (create / rename / delete + tombstone)
+// Directory ops (create / delete + tombstone)
 // ------------------------------------------------------
 
-pub fn create_keyfile_dir(keyfiles_root: &Path, name: &str) -> std::io::Result<PathBuf> {
-    validate_keyfile_name(name)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+pub fn create_keyfile_dir(keyfiles_root: &Path, name: &str) -> AppResult<PathBuf> {
+    validate_keyfile_dir_name(name).map_err(|_| AppError::KeyfileDirNameInvalid)?;
 
     // Ensure root exists (store owns directory ops).
     std::fs::create_dir_all(keyfiles_root)?;
@@ -159,59 +158,13 @@ pub fn create_keyfile_dir(keyfiles_root: &Path, name: &str) -> std::io::Result<P
     let dir = keyfiles_root.join(name);
 
     if dir.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "keyfile name exists",
-        ));
+        return Err(
+            std::io::Error::new(std::io::ErrorKind::AlreadyExists, "keyfile name exists").into(),
+        );
     }
 
     std::fs::create_dir(&dir)?;
     Ok(dir)
-}
-
-pub fn rename_keyfile_dir(keyfiles_root: &Path, from: &str, to: &str) -> std::io::Result<PathBuf> {
-    validate_keyfile_name(from)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid from"))?;
-    validate_keyfile_name(to)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid to"))?;
-
-    std::fs::create_dir_all(keyfiles_root)?;
-
-    let from_dir = keyfiles_root.join(from);
-    let to_dir = keyfiles_root.join(to);
-
-    if !from_dir.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "from missing",
-        ));
-    }
-
-    // If it's tombstoned, treat as not found.
-    if from_dir.join(TOMBSTONE_FILE).exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "from tombstoned",
-        ));
-    }
-
-    // Must be a valid keyfile directory.
-    if !from_dir.join(KEYFILE_FILENAME).is_file() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "from is not a keyfile dir",
-        ));
-    }
-
-    if to_dir.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "to exists",
-        ));
-    }
-
-    std::fs::rename(&from_dir, &to_dir)?;
-    Ok(to_dir)
 }
 
 fn write_tombstone_best_effort(dir: &Path) {
@@ -262,17 +215,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_keyfile_name_rejects_empty_and_reserved() {
-        assert_eq!(validate_keyfile_name(""), Err("empty"));
-        assert_eq!(validate_keyfile_name("."), Err("reserved"));
-        assert_eq!(validate_keyfile_name(".."), Err("reserved"));
+    fn validate_keyfile_dir_name_rejects_empty_and_reserved() {
+        assert_eq!(validate_keyfile_dir_name(""), Err("empty"));
+        assert_eq!(validate_keyfile_dir_name("."), Err("reserved"));
+        assert_eq!(validate_keyfile_dir_name(".."), Err("reserved"));
     }
 
     #[test]
-    fn validate_keyfile_name_rejects_separators_and_nul() {
-        assert_eq!(validate_keyfile_name("a/b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a\\b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a\0b"), Err("invalid_char"));
+    fn validate_keyfile_dir_name_rejects_separators_and_nul() {
+        assert_eq!(validate_keyfile_dir_name("a/b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a\\b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a\0b"), Err("invalid_char"));
     }
 
     #[test]
@@ -288,7 +241,10 @@ mod tests {
 
         // duplicate
         let e = create_keyfile_dir(&root, "alpha").unwrap_err();
-        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        match e {
+            AppError::Io(ioe) => assert_eq!(ioe.kind(), std::io::ErrorKind::AlreadyExists),
+            _ => panic!("expected AppError::Io(AlreadyExists), got: {e:?}"),
+        }
     }
 
     #[test]
@@ -333,44 +289,24 @@ mod tests {
     }
 
     #[test]
-    fn rename_keyfile_dir_renames_and_preserves_keyfile_json() {
-        let td = tempdir().unwrap();
-        let root = td.path().join("keyfiles");
-
-        let from = create_keyfile_dir(&root, "from").unwrap();
-        touch(&from.join(KEYFILE_FILENAME));
-
-        let to = rename_keyfile_dir(&root, "from", "to").unwrap();
-        assert!(!from.exists());
-        assert!(to.is_dir());
-        assert!(to.join(KEYFILE_FILENAME).is_file());
-
-        // rename to existing should fail
-        let other = create_keyfile_dir(&root, "other").unwrap();
-        touch(&other.join(KEYFILE_FILENAME));
-        let e = rename_keyfile_dir(&root, "to", "other").unwrap_err();
-        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+    fn validate_keyfile_dir_name_rejects_windows_forbidden_chars_and_trailing() {
+        assert_eq!(validate_keyfile_dir_name("a:b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a*b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a?b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a|b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a<b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a>b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("a\"b"), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("trail."), Err("invalid_char"));
+        assert_eq!(validate_keyfile_dir_name("trail "), Err("invalid_char"));
     }
 
     #[test]
-    fn validate_keyfile_name_rejects_windows_forbidden_chars_and_trailing() {
-        assert_eq!(validate_keyfile_name("a:b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a*b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a?b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a|b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a<b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a>b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("a\"b"), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("trail."), Err("invalid_char"));
-        assert_eq!(validate_keyfile_name("trail "), Err("invalid_char"));
-    }
-
-    #[test]
-    fn validate_keyfile_name_rejects_windows_device_names() {
+    fn validate_keyfile_dir_name_rejects_windows_device_names() {
         for n in [
             "con", "CON", "con.txt", "prn", "aux", "nul", "com1", "COM9.log", "lpt1", "LPT9.txt",
         ] {
-            assert_eq!(validate_keyfile_name(n), Err("reserved"), "name: {n}");
+            assert_eq!(validate_keyfile_dir_name(n), Err("reserved"), "name: {n}");
         }
     }
 }

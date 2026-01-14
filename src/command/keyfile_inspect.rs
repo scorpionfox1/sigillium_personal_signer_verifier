@@ -35,17 +35,15 @@ mod tests {
     use crate::types::KeyfileState;
     use crate::{context::AppCtx, types::AppState};
     use std::fs;
+    use std::path::{Path, PathBuf};
 
-    const FIXED_KEYFILE_NAME: &str = "sigillium.keyfile.json";
-
-    fn mk_ctx_with_empty_dir(root: &std::path::Path, name: &str) -> (AppCtx, std::path::PathBuf) {
+    fn mk_ctx_with_empty_dir(root: &Path, name: &str) -> AppCtx {
         let kdir = root.join("keyfiles").join(name);
         fs::create_dir_all(&kdir).expect("mkdir keyfile dir");
 
         let mut ctx = AppCtx::new(root.to_path_buf());
-        ctx.selected_keyfile_dir = Some(kdir.clone());
-
-        (ctx, kdir)
+        ctx.selected_keyfile_dir = Some(PathBuf::from(name));
+        ctx
     }
 
     #[test]
@@ -54,11 +52,13 @@ mod tests {
         let td_keyfile = tempfile::tempdir().expect("tempdir keyfile");
 
         let state = AppState::new_for_tests(td_state.path()).expect("init_state");
-        let (ctx, kdir) = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
+        let ctx = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
+
+        let keyfile_path = ctx.current_keyfile_path().expect("current_keyfile_path");
 
         // Ensure file truly doesn't exist.
         assert!(
-            !kdir.join(FIXED_KEYFILE_NAME).exists(),
+            !keyfile_path.exists(),
             "test assumes keyfile.json does not exist"
         );
 
@@ -76,8 +76,8 @@ mod tests {
         // Create a valid keyfile using existing test fixture helpers.
         let fx = crate::keyfile::ops::test_support::mk_fixture("passphrase").expect("mk_fixture");
 
-        let (ctx, kdir) = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
-        let dst = kdir.join(FIXED_KEYFILE_NAME);
+        let ctx = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
+        let dst = ctx.current_keyfile_path().expect("current_keyfile_path");
         fs::copy(&fx.path, &dst).expect("copy fixture keyfile");
         assert!(dst.exists());
 

@@ -29,6 +29,7 @@ pub enum AppError {
     InternalStateLockFailed,
     StateLockPoisoned,
     InvalidPath,
+    KeyfileDirNameInvalid,
     AppLocked,
     NoActiveKeySelected,
     KeyfileMissingOrCorrupted,
@@ -137,6 +138,7 @@ impl AppError {
             Msg(_) => "Operation failed.",
             InternalStateLockFailed | StateLockPoisoned => "Internal state lock failed.",
             InvalidPath => "Invalid path.",
+            KeyfileDirNameInvalid => "Invalid keyfile name.",
             AppLocked => "App is locked.",
             NoActiveKeySelected => "No active key selected.",
             KeyfileMissingOrCorrupted => "Keyfile missing or corrupted.",
@@ -237,6 +239,7 @@ impl fmt::Display for AppError {
             InternalStateLockFailed => write!(f, "internal state lock failed"),
             StateLockPoisoned => write!(f, "state lock poisoned"),
             InvalidPath => write!(f, "invalid path"),
+            KeyfileDirNameInvalid => write!(f, "Bad keyfile name."), // ui calls it "keyfile name," but in fact it is a dir
             AppLocked => write!(f, "app is locked"),
             NoActiveKeySelected => write!(f, "no active key selected"),
             KeyfileMissingOrCorrupted => write!(f, "keyfile missing or corrupted"),

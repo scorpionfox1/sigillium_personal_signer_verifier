@@ -165,3 +165,7 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
     super::refresh_key_meta_cache(state, ctx)?;
     Ok(())
 }
+
+pub fn lock_and_quit(state: &AppState) -> AppResult<()> {
+    secure_shutdown_best_effort(state, "lock_and_quit").map_err(AppError::Msg)
+}
