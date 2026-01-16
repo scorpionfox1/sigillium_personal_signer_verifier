@@ -103,73 +103,79 @@ pub fn clear_active_key(state: &AppState) -> AppResult<()> {
 }
 
 pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult<()> {
-    lock_app_inner_if_unlocked(state, "unlock_cleanup").map_err(AppError::Msg)?;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
-    let passphrase = Zeroizing::new(passphrase.to_owned());
-    super::validate_passphrase_for_unlock(&passphrase).map_err(AppError::Msg)?;
+    const MIN_UNLOCK_TIME: Duration = Duration::from_millis(250);
+    let start = Instant::now();
 
-    let keyfile_path = ctx
-        .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+    let res: AppResult<()> = (|| {
+        lock_app_inner_if_unlocked(state, "unlock_cleanup").map_err(AppError::Msg)?;
 
-    let master_key = match keyfile::read_master_key(&keyfile_path, &passphrase) {
-        Ok(k) => k,
-        Err(_) => {
+        let passphrase = Zeroizing::new(passphrase.to_owned());
+        super::validate_passphrase_for_unlock(&passphrase).map_err(AppError::Msg)?;
+
+        let keyfile_path = ctx
+            .current_keyfile_path()
+            .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+
+        let master_key = match keyfile::read_master_key(&keyfile_path, &passphrase) {
+            Ok(k) => k,
+            Err(_) => {
+                let dir_name = ctx
+                    .selected_keyfile_dir()
+                    .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+
+                let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+                return Err(AppError::KeyfileQuarantined { dir_name });
+            }
+        };
+
+        if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path) {
+            lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppError::Msg)?;
+
             let dir_name = ctx
                 .selected_keyfile_dir()
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
                 .unwrap_or_else(|| "<unknown>".to_string());
 
             let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
-
-            thread::sleep(Duration::from_millis(250));
             return Err(AppError::KeyfileQuarantined { dir_name });
         }
-    };
 
-    // Validate structure only: structure failure == corruption
-    if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path) {
-        lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppError::Msg)?;
+        if let Err(_e) = keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key) {
+            return Err(AppError::KeyfilePassphraseBad);
+        }
 
-        let dir_name = ctx
-            .selected_keyfile_dir()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-            .unwrap_or_else(|| "<unknown>".to_string());
+        {
+            let mut secrets_guard =
+                lock_secrets(state).map_err(|_| AppError::InternalStateLockFailed)?;
+            *secrets_guard = Some(SecretsState {
+                master_key: Zeroizing::new(master_key),
+                active_private: None,
+            });
+        }
 
-        let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+        {
+            let mut session = lock_session(state).map_err(|_| AppError::InternalStateLockFailed)?;
+            session.unlocked = true;
+            session.active_key_id = None;
+            session.active_associated_key_id = None;
+        }
 
-        thread::sleep(Duration::from_millis(250));
-        return Err(AppError::KeyfileQuarantined { dir_name });
+        lock_master_key_best_effort(state, "unlock_app");
+        super::refresh_key_meta_cache(state, ctx)?;
+        Ok(())
+    })();
+
+    // enforce minimum time for *all* outcomes
+    let elapsed = start.elapsed();
+    if elapsed < MIN_UNLOCK_TIME {
+        thread::sleep(MIN_UNLOCK_TIME - elapsed);
     }
 
-    // MAC failure during unlock is ambiguous (wrong passphrase vs tamper).
-    // Treat as bad passphrase; do NOT quarantine here.
-    if let Err(_e) = keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key) {
-        thread::sleep(Duration::from_millis(250));
-        return Err(AppError::KeyfilePassphraseBad);
-    }
-
-    // secrets
-    {
-        let mut secrets_guard =
-            lock_secrets(state).map_err(|_| AppError::InternalStateLockFailed)?;
-        *secrets_guard = Some(SecretsState {
-            master_key: Zeroizing::new(master_key),
-            active_private: None,
-        });
-    }
-
-    // session
-    {
-        let mut session = lock_session(state).map_err(|_| AppError::InternalStateLockFailed)?;
-        session.unlocked = true;
-        session.active_key_id = None;
-        session.active_associated_key_id = None;
-    }
-
-    lock_master_key_best_effort(state, "unlock_app");
-    super::refresh_key_meta_cache(state, ctx)?;
-    Ok(())
+    res
 }
 
 pub fn secure_prepare_for_quit(state: &AppState) -> AppResult<()> {
