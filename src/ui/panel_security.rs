@@ -1,8 +1,8 @@
 // src/ui/panel_security.rs
 
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::types::KeyfileState;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::types::KeyfileState;
+use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
 
@@ -267,7 +267,7 @@ impl SecurityPanel {
                                 return;
                             };
 
-                            sigillum_personal_signer_verifier_lib::keyfile_store::destroy_keyfile_dir_best_effort(dir);
+                            sigillium_personal_signer_verifier_lib::keyfile_store::destroy_keyfile_dir_best_effort(dir);
 
                             ctx.set_selected_keyfile_dir(None);
                             self.msg.set_success("Keyfile destroyed.");

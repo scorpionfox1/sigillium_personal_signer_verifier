@@ -6,8 +6,8 @@
 mod ui;
 
 use directories::ProjectDirs;
-use sigillum_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
-use sigillum_personal_signer_verifier_lib::fs_hardening;
+use sigillium_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
+use sigillium_personal_signer_verifier_lib::fs_hardening;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ fn main() -> eframe::Result<()> {
 
     std::fs::create_dir_all(&app_data_dir).expect("Could not create app data dir");
 
-    let state = sigillum_personal_signer_verifier_lib::init_state(&app_data_dir)
+    let state = sigillium_personal_signer_verifier_lib::init_state(&app_data_dir)
         .expect("failed to init app state");
     let state = Arc::new(state);
 

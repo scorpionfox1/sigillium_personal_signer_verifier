@@ -2,7 +2,7 @@
 
 use super::Route;
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, keyfile_store::KeyfileStore, types::AppState,
 };
 
@@ -50,7 +50,7 @@ impl CreateKeyfilePanel {
 
         // If we detected corruption/tampering, tell the user why they're here.
         if let Ok(ks) = state.keyfile_state.lock() {
-            if *ks == sigillum_personal_signer_verifier_lib::types::KeyfileState::Corrupted {
+            if *ks == sigillium_personal_signer_verifier_lib::types::KeyfileState::Corrupted {
                 ui.horizontal(|ui| {
                     ui.colored_label(egui::Color32::YELLOW, "Warn:");
                     ui.label("Your current keyfile appears corrupted (or has been tampered with). Create a new keyfile to continue.");
@@ -121,7 +121,7 @@ impl CreateKeyfilePanel {
                     ctx.set_selected_keyfile_dir(None);
 
                     if let Ok(mut ks) = state.keyfile_state.lock() {
-                        *ks = sigillum_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted;
+                        *ks = sigillium_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted;
                     }
                 }
                 Err(e) => {

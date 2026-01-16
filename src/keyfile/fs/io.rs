@@ -99,7 +99,7 @@ pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
     Ok(())
 }
 
-pub fn backup_keyfile_with_corrupt_prefix(keyfile_path: &Path) -> AppResult<PathBuf> {
+pub fn backup_keyfile_with_quarantine_prefix(keyfile_path: &Path) -> AppResult<PathBuf> {
     let parent = keyfile_path
         .parent()
         .ok_or_else(|| AppError::KeyfileFsBackupFailed("invalid keyfile path".to_string()))?;
@@ -116,9 +116,9 @@ pub fn backup_keyfile_with_corrupt_prefix(keyfile_path: &Path) -> AppResult<Path
 
     for i in 0u32..10_000u32 {
         let candidate_name = if i == 0 {
-            format!("corrupt.{fname}")
+            format!("quarantine.{fname}")
         } else {
-            format!("corrupt.{i}.{fname}")
+            format!("quarantine.{i}.{fname}")
         };
 
         let candidate_path = parent.join(candidate_name);
@@ -302,7 +302,7 @@ mod tests {
         fs::write(&path, b"hello").unwrap();
         assert!(path.exists());
 
-        let backup = backup_keyfile_with_corrupt_prefix(&path).unwrap();
+        let backup = backup_keyfile_with_quarantine_prefix(&path).unwrap();
 
         assert!(!path.exists());
         assert!(backup.exists());
@@ -322,7 +322,7 @@ mod tests {
         assert!(colliding.exists());
 
         fs::write(&path, b"hello").unwrap();
-        let backup = backup_keyfile_with_corrupt_prefix(&path).unwrap();
+        let backup = backup_keyfile_with_quarantine_prefix(&path).unwrap();
 
         assert!(!path.exists());
         assert!(backup.exists());
@@ -336,7 +336,7 @@ mod tests {
         let dir = mk_temp_dir("io_backup_missing");
         let path = dir.join(KEYFILE_FILENAME);
 
-        let err = backup_keyfile_with_corrupt_prefix(&path).unwrap_err();
+        let err = backup_keyfile_with_quarantine_prefix(&path).unwrap_err();
         assert!(matches!(err, AppError::KeyfileMissingOrCorrupted));
     }
 }

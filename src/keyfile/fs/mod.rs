@@ -3,5 +3,5 @@
 mod io;
 pub(crate) mod lock;
 
-pub use io::backup_keyfile_with_corrupt_prefix;
+pub use io::backup_keyfile_with_quarantine_prefix;
 pub(crate) use io::{read_json, write_json};

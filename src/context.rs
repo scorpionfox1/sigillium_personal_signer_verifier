@@ -60,4 +60,9 @@ impl AppCtx {
         self.selected_keyfile_dir()
             .map(|dir| dir.join(KEYFILE_NAME))
     }
+
+    #[cfg(test)]
+    pub fn set_selected_keyfile_dir_for_tests(&mut self, dir: PathBuf) {
+        self.selected_keyfile_dir = Some(dir).into();
+    }
 }

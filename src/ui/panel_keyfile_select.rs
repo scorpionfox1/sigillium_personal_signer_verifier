@@ -3,7 +3,7 @@
 use super::message::PanelMsgState;
 use super::Route;
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     context::AppCtx,
     keyfile_store::KeyfileStore,
     types::{AppState, KeyfileState},
@@ -34,6 +34,13 @@ impl KeyfileSelectPanel {
         self.selected = None;
         self.loaded = false;
         self.keyfiles.clear();
+    }
+
+    // Called by the UI router when the command layer quarantines a keyfile directory.
+    pub fn set_quarantined_message(&mut self, dir_name: &str) {
+        self.msg.set_warn(&format!(
+            "Keyfile '{dir_name}' was quarantined due to corruption/tampering. Select another keyfile or create a new one."
+        ));
     }
 
     fn refresh_list(&mut self, ctx: &AppCtx) {
@@ -120,26 +127,11 @@ impl KeyfileSelectPanel {
                 return;
             };
 
-            if let Ok(mut s) = state.session.lock() {
-                s.unlocked = false;
-                s.active_key_id = None;
-                s.active_associated_key_id = None;
-            }
-
-            let dir = ctx.keyfiles_root().join(&name);
-            ctx.set_selected_keyfile_dir(Some(dir));
-
-            let Some(name) = self.selected.clone() else {
-                self.msg.set_warn("Select a keyfile first.");
-                self.msg.show(ui, false);
-                return;
-            };
-
             // Set selection in context
             let dir = ctx.keyfiles_root().join(&name);
             ctx.set_selected_keyfile_dir(Some(dir));
 
-            // App becomes locked immediately
+            // App becomes locked immediately + clear active material
             if let Ok(mut s) = state.session.lock() {
                 s.unlocked = false;
                 s.active_key_id = None;
@@ -151,7 +143,7 @@ impl KeyfileSelectPanel {
 
             // Compute keyfile state for the selected keyfile.json
             let ks = match ctx.current_keyfile_path() {
-                Some(p) => sigillum_personal_signer_verifier_lib::keyfile::check_keyfile_state(&p)
+                Some(p) => sigillium_personal_signer_verifier_lib::keyfile::check_keyfile_state(&p)
                     .unwrap_or(KeyfileState::Corrupted),
                 None => KeyfileState::Missing,
             };

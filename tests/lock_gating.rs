@@ -2,7 +2,7 @@
 
 mod common;
 
-use sigillum_personal_signer_verifier_lib::{command, types::SignVerifyMode};
+use sigillium_personal_signer_verifier_lib::{command, types::SignVerifyMode};
 
 use crate::common::{setup_locked_keyfile, setup_one_active_key};
 

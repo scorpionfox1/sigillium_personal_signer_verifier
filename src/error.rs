@@ -33,6 +33,7 @@ pub enum AppError {
     AppLocked,
     NoActiveKeySelected,
     KeyfileMissingOrCorrupted,
+    KeyfileQuarantined { dir_name: String },
 
     // --------------------------------------------------
     // keyfile fs (IO / durability / locking)
@@ -142,6 +143,10 @@ impl AppError {
             AppLocked => "App is locked.",
             NoActiveKeySelected => "No active key selected.",
             KeyfileMissingOrCorrupted => "Keyfile missing or corrupted.",
+            KeyfileQuarantined { .. } => {
+                kind = UserMsgKind::Warn;
+                "Keyfile was corrupted and quarantined."
+            }
 
             // keyfile fs
             KeyfileFsReadFailed(_) => "Failed to read keyfile.",
@@ -243,6 +248,9 @@ impl fmt::Display for AppError {
             AppLocked => write!(f, "app is locked"),
             NoActiveKeySelected => write!(f, "no active key selected"),
             KeyfileMissingOrCorrupted => write!(f, "keyfile missing or corrupted"),
+            KeyfileQuarantined { dir_name } => {
+                write!(f, "keyfile corrupted and quarantined: {dir_name}")
+            }
 
             KeyfileFsReadFailed(s) => write!(f, "keyfile read failed: {s}"),
             KeyfileFsInvalidJson(s) => write!(f, "keyfile invalid json: {s}"),

@@ -1,7 +1,7 @@
 // src/ui/route_policy.rs
 
 use crate::ui::Route;
-use sigillum_personal_signer_verifier_lib::types::KeyfileState;
+use sigillium_personal_signer_verifier_lib::types::KeyfileState;
 
 /// Minimal routing context derived by ui/mod.rs
 #[derive(Clone, Copy, Debug)]

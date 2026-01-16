@@ -1,7 +1,7 @@
 // src/ui/widgets.rs
 
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
@@ -62,7 +62,7 @@ pub fn active_key_selector(
                 }
 
                 // if missing/corrupted, clear active key + route to CreateKeyfile
-                if ks != sigillum_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted {
+                if ks != sigillium_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted {
                     let _ = command::clear_active_key(state);
                     *route = super::Route::CreateKeyfile;
                 }

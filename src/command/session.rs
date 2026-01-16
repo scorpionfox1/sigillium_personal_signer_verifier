@@ -37,21 +37,31 @@ pub fn select_active_key(
 
     let (privk, associated_s) = match key_res {
         Ok(k) => k,
-        Err(e) => {
-            match e {
-                AppError::KeyfileMacInvalid
-                | AppError::KeyfileMacMissing
-                | AppError::KeyfileStructCorrupted
-                | AppError::KeyfileCorrupt
-                | AppError::KeyfileMissingOrCorrupted => {
-                    let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
-                }
-                _ => {}
+        Err(e) => match e {
+            AppError::KeyfileMacInvalid
+            | AppError::KeyfileMacMissing
+            | AppError::KeyfileStructCorrupted
+            | AppError::KeyfileCorrupt
+            | AppError::KeyfileMissingOrCorrupted => {
+                let dir_name = ctx
+                    .selected_keyfile_dir()
+                    .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+
+                let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+                let _ = refresh_keyfile_state(state, ctx);
+
+                return (
+                    crate::types::KeyfileState::Missing,
+                    Err(AppError::KeyfileQuarantined { dir_name }),
+                );
             }
-            let ks =
-                refresh_keyfile_state(state, ctx).unwrap_or(crate::types::KeyfileState::Corrupted);
-            return (ks, Err(e));
-        }
+            _ => {
+                let ks = refresh_keyfile_state(state, ctx)
+                    .unwrap_or(crate::types::KeyfileState::Missing);
+                return (ks, Err(e));
+            }
+        },
     };
 
     let res: AppResult<()> = (|| {
@@ -74,14 +84,14 @@ pub fn select_active_key(
                 return Err(AppError::AppLocked);
             }
             session.active_key_id = Some(key_id);
-            session.active_associated_key_id = Some(associated_s); // may be ""
+            session.active_associated_key_id = Some(associated_s);
         }
 
         record_best_effort_platform_failures(state, "select_active_key", fail.into_iter());
         Ok(())
     })();
 
-    let ks = refresh_keyfile_state(state, ctx).unwrap_or(crate::types::KeyfileState::Corrupted);
+    let ks = refresh_keyfile_state(state, ctx).unwrap_or(crate::types::KeyfileState::Missing);
     (ks, res)
 }
 
@@ -124,24 +134,37 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
 
     let master_key = match keyfile::read_master_key(&keyfile_path, &passphrase) {
         Ok(k) => k,
-        Err(e) => {
+        Err(_) => {
+            let dir_name = ctx
+                .selected_keyfile_dir()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+            let _ = refresh_keyfile_state(state, ctx);
+
             thread::sleep(Duration::from_millis(250));
-            return Err(AppError::Msg(e.to_string()));
+            return Err(AppError::KeyfileQuarantined { dir_name });
         }
     };
 
     // Validate integrity. Any failure is treated as tamper/corruption.
-    if let Err(e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path)
+    if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path)
         .and_then(|_| keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key))
     {
         lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppError::Msg)?;
-        let _ = refresh_keyfile_state(state, ctx)?;
+
+        let dir_name = ctx
+            .selected_keyfile_dir()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+        let _ = refresh_keyfile_state(state, ctx);
 
         thread::sleep(Duration::from_millis(250));
-        return Err(AppError::Msg(e.to_string()));
+        return Err(AppError::KeyfileQuarantined { dir_name });
     }
-
-    let _ = refresh_keyfile_state(state, ctx)?;
 
     // secrets
     {

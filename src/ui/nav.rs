@@ -6,7 +6,8 @@ use eframe::egui;
 /// What the nav should show (derived by ui/mod.rs)
 #[derive(Clone, Copy, Debug)]
 pub struct NavModel {
-    pub show_tabs: bool,
+    pub show_nav_tabs: bool,
+    pub keyfile_selected: bool,
 }
 
 pub struct LeftNav;
@@ -22,6 +23,11 @@ impl LeftNav {
             .resizable(false)
             .min_width(160.0)
             .show(ctx, |ui| {
+                // Hide everything until a keyfile is selected.
+                if !model.keyfile_selected {
+                    return;
+                }
+
                 ui.vertical(|ui| {
                     // Lock button (top)
                     let is_locked = matches!(*route, Route::Locked);
@@ -36,7 +42,7 @@ impl LeftNav {
 
                     ui.separator();
 
-                    if model.show_tabs {
+                    if model.show_nav_tabs {
                         ui.add_enabled_ui(!is_locked, |ui| {
                             nav_btn(ui, route, Route::Sign, "Sign");
                             nav_btn(ui, route, Route::Verify, "Verify");

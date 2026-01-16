@@ -14,7 +14,22 @@ pub fn refresh_keyfile_state(state: &AppState, ctx: &AppCtx) -> AppResult<Keyfil
 
     let ks = match check_keyfile_state(&keyfile_path) {
         Ok(ks) => ks,
-        Err(_e) => KeyfileState::Corrupted,
+        Err(_e) => {
+            let dir_name = ctx
+                .selected_keyfile_dir()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
+
+            *state
+                .keyfile_state
+                .lock()
+                .map_err(|_| AppError::Msg("Internal state lock failed".into()))? =
+                KeyfileState::Missing;
+
+            return Err(AppError::KeyfileQuarantined { dir_name });
+        }
     };
 
     *state
@@ -42,7 +57,7 @@ mod tests {
         fs::create_dir_all(&kdir).expect("mkdir keyfile dir");
 
         let mut ctx = AppCtx::new(root.to_path_buf());
-        ctx.selected_keyfile_dir = Some(PathBuf::from(name));
+        ctx.set_selected_keyfile_dir_for_tests(PathBuf::from(name));
         ctx
     }
 

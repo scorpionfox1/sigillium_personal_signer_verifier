@@ -30,10 +30,10 @@ use panel_lock::LockPanel;
 use panel_security::SecurityPanel;
 use panel_sign::SignPanel;
 use panel_verify::VerifyPanel;
-use sigillum_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
-use sigillum_personal_signer_verifier_lib::context::AppCtx;
-use sigillum_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
-use sigillum_personal_signer_verifier_lib::types::{AppState, KeyfileState};
+use sigillium_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
+use sigillium_personal_signer_verifier_lib::context::AppCtx;
+use sigillium_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
+use sigillium_personal_signer_verifier_lib::types::{AppState, KeyfileState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route {
@@ -142,8 +142,17 @@ impl UiApp {
 
     fn derive_nav_model(&self, rctx: RouteCtx) -> NavModel {
         NavModel {
-            show_tabs: rctx.keyfile_selected && rctx.keyfile_state == KeyfileState::NotCorrupted,
+            keyfile_selected: rctx.keyfile_selected,
+            show_nav_tabs: rctx.keyfile_selected
+                && rctx.keyfile_state == KeyfileState::NotCorrupted,
         }
+    }
+
+    fn current_selected_keyfile_dir_name(&self) -> Option<String> {
+        let keyfile_path = self.ctx.current_keyfile_path()?;
+        let dir = keyfile_path.parent()?;
+        let name = dir.file_name()?.to_str()?;
+        Some(name.to_string())
     }
 }
 
@@ -192,8 +201,27 @@ impl eframe::App for UiApp {
             self.best_effort_warn.clear();
 
             let guarded = apply_route_guards(self.route, rctx);
+
+            // Case 1: route guard forced us to KeyfileSelect
             if guarded != self.route {
+                if guarded == Route::KeyfileSelect
+                    && rctx.keyfile_selected
+                    && rctx.keyfile_state != KeyfileState::NotCorrupted
+                {
+                    if let Some(dir_name) = self.current_selected_keyfile_dir_name() {
+                        self.keyfile_select.set_quarantined_message(&dir_name);
+                    }
+                }
                 self.route = guarded;
+            }
+            // Case 2: panel explicitly routed us to KeyfileSelect (e.g. sign / verify / registry)
+            else if self.route == Route::KeyfileSelect
+                && rctx.keyfile_selected
+                && rctx.keyfile_state != KeyfileState::NotCorrupted
+            {
+                if let Some(dir_name) = self.current_selected_keyfile_dir_name() {
+                    self.keyfile_select.set_quarantined_message(&dir_name);
+                }
             }
 
             if entering_locked(self.prev_route, self.route) {

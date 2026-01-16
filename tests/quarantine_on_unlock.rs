@@ -2,7 +2,7 @@
 
 mod common;
 
-use sigillum_personal_signer_verifier_lib::command;
+use sigillium_personal_signer_verifier_lib::command;
 
 use crate::common::setup_one_active_key;
 
@@ -43,8 +43,8 @@ fn quarantine_happens_on_select_active_key_when_keyfile_is_tampered() {
     assert!(
         matches!(
             ks,
-            sigillum_personal_signer_verifier_lib::types::KeyfileState::Missing
-                | sigillum_personal_signer_verifier_lib::types::KeyfileState::Corrupted
+            sigillium_personal_signer_verifier_lib::types::KeyfileState::Missing
+                | sigillium_personal_signer_verifier_lib::types::KeyfileState::Corrupted
         ),
         "expected Missing (quarantined away) or Corrupted, got: {:?}",
         ks

@@ -2,7 +2,7 @@
 
 mod common;
 
-use sigillum_personal_signer_verifier_lib::{command, context::AppCtx, types::AppState};
+use sigillium_personal_signer_verifier_lib::{command, context::AppCtx, types::AppState};
 
 const OLD: &str = "correct horse battery staple";
 const NEW: &str = "this is a different passphrase";
@@ -84,7 +84,7 @@ fn passphrase_rotation_gates_unlock_and_signing_still_works() {
     let msg = "hello after passphrase rotation";
     let sig = command::sign_payload(
         msg,
-        sigillum_personal_signer_verifier_lib::types::SignVerifyMode::Text,
+        sigillium_personal_signer_verifier_lib::types::SignVerifyMode::Text,
         None,
         &state2,
     )
@@ -94,7 +94,7 @@ fn passphrase_rotation_gates_unlock_and_signing_still_works() {
         &pubkey_hex,
         msg,
         &sig,
-        sigillum_personal_signer_verifier_lib::types::SignVerifyMode::Text,
+        sigillium_personal_signer_verifier_lib::types::SignVerifyMode::Text,
         None,
     )
     .expect("verify_payload");
