@@ -21,6 +21,7 @@ pub struct UserMsg {
 
 #[derive(Debug)]
 pub enum AppError {
+    KeyfilePassphraseBad,
     // --------------------------------------------------
     // generic / plumbing
     // --------------------------------------------------
@@ -134,6 +135,7 @@ impl AppError {
         let detail = Some(self.to_string());
 
         let short: &'static str = match self {
+            KeyfilePassphraseBad => "Incorrect keyfile passphrase.",
             // generic
             Io(_) => "File operation failed.",
             Msg(_) => "Operation failed.",
@@ -239,6 +241,7 @@ impl fmt::Display for AppError {
         use AppError::*;
 
         match self {
+            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
             Io(e) => write!(f, "io error: {e}"),
             Msg(s) => write!(f, "{s}"),
             InternalStateLockFailed => write!(f, "internal state lock failed"),

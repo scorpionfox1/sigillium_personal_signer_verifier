@@ -148,10 +148,8 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
         }
     };
 
-    // Validate integrity. Any failure is treated as tamper/corruption.
-    if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path)
-        .and_then(|_| keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key))
-    {
+    // Validate structure only: structure failure == corruption
+    if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path) {
         lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppError::Msg)?;
 
         let dir_name = ctx
@@ -164,6 +162,13 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
 
         thread::sleep(Duration::from_millis(250));
         return Err(AppError::KeyfileQuarantined { dir_name });
+    }
+
+    // MAC failure during unlock is ambiguous (wrong passphrase vs tamper).
+    // Treat as bad passphrase; do NOT quarantine here.
+    if let Err(_e) = keyfile::verify_keyfile_mac_on_disk(&keyfile_path, &master_key) {
+        thread::sleep(Duration::from_millis(250));
+        return Err(AppError::KeyfilePassphraseBad);
     }
 
     // secrets

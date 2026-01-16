@@ -144,7 +144,7 @@ impl UiApp {
 
     fn derive_nav_model(&self, rctx: RouteCtx) -> NavModel {
         NavModel {
-            keyfile_selected: rctx.keyfile_selected,
+            _keyfile_selected: rctx.keyfile_selected,
             show_nav_tabs: rctx.keyfile_selected
                 && rctx.keyfile_state == KeyfileState::NotCorrupted,
         }
@@ -324,6 +324,25 @@ impl eframe::App for UiApp {
                 }
             }
         });
+
+        // ------------------------------------------------------------------
+        // Keyfile footer (reserved bottom area; never clipped by ScrollAreas)
+        // ------------------------------------------------------------------
+        if !matches!(
+            self.route,
+            Route::Locked | Route::KeyfileSelect | Route::CreateKeyfile
+        ) {
+            egui::TopBottomPanel::bottom("keyfile_footer").show(ctx, |ui| {
+                ui.add_space(4.0);
+
+                let name = self
+                    .current_selected_keyfile_dir_name()
+                    .unwrap_or_else(|| "(none)".to_string());
+
+                ui.label(format!("keyfile: {name}"));
+                ui.add_space(4.0);
+            });
+        }
 
         if self.route != Route::Locked {
             self.last_route = self.route;

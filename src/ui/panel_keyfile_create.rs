@@ -41,13 +41,6 @@ impl CreateKeyfilePanel {
         ui.heading("Create keyfile");
         ui.separator();
 
-        if ui.button("Cancel").clicked() {
-            self.clear_messages();
-            self.reset_inputs();
-            *route = Route::KeyfileSelect;
-            return;
-        }
-
         // If we detected corruption/tampering, tell the user why they're here.
         if let Ok(ks) = state.keyfile_state.lock() {
             if *ks == sigillium_personal_signer_verifier_lib::types::KeyfileState::Corrupted {
@@ -87,9 +80,20 @@ impl CreateKeyfilePanel {
             ui.add_space(8.0);
         }
 
-        let clicked = ui
-            .add_enabled(matches, egui::Button::new("Create keyfile"))
-            .clicked();
+        let mut clicked = false;
+        ui.horizontal(|ui| {
+            clicked = ui
+                .add_enabled(matches, egui::Button::new("Create keyfile"))
+                .clicked();
+
+            ui.add_space(12.0);
+
+            if ui.button("Cancel").clicked() {
+                self.clear_messages();
+                self.reset_inputs();
+                *route = Route::KeyfileSelect;
+            }
+        });
 
         if clicked {
             self.clear_messages();

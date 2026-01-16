@@ -85,114 +85,124 @@ impl KeyfileSelectPanel {
         route: &mut Route,
         return_route: &mut Option<Route>,
     ) {
-        ui.heading("Select keyfile");
-        ui.separator();
-
         if !self.loaded {
             self.refresh_list(ctx);
         }
 
-        ui.add_space(12.0);
+        let _ = return_route;
 
-        if self.keyfiles.is_empty() {
-            ui.label("No keyfiles found.");
-            ui.label("Create a new keyfile to continue.");
-            ui.add_space(12.0);
-        } else {
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .max_height(260.0)
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+            ui.add_space(40.0);
 
-                    let mut picked: Option<String> = None;
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_min_width(420.0);
 
-                    for row in self.keyfiles.iter() {
-                        let label = if row.has_keyfile {
-                            row.name.clone()
-                        } else {
-                            format!("{} (no keyfile)", row.name)
-                        };
+                ui.vertical(|ui| {
+                    ui.add_space(6.0);
+                    ui.heading("Select a keyfile");
+                    ui.add_space(12.0);
 
-                        let is_selected = self.selected.as_deref() == Some(row.name.as_str());
+                    // Content area
+                    if self.keyfiles.is_empty() {
+                        ui.label("No keyfiles found.");
+                        ui.add_space(6.0);
+                        ui.label("Create a new keyfile to continue.");
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .max_height(260.0)
+                            .show(ui, |ui| {
+                                let mut picked: Option<String> = None;
 
-                        let resp = ui.add_enabled(
-                            row.has_keyfile,
-                            egui::Button::new(label).selected(is_selected),
-                        );
+                                for row in self.keyfiles.iter() {
+                                    let label = if row.has_keyfile {
+                                        row.name.clone()
+                                    } else {
+                                        format!("{} (no keyfile)", row.name)
+                                    };
 
-                        if resp.clicked() && row.has_keyfile {
-                            picked = Some(row.name.clone());
+                                    let is_selected =
+                                        self.selected.as_deref() == Some(row.name.as_str());
+
+                                    let resp = ui.add_enabled(
+                                        row.has_keyfile,
+                                        egui::Button::new(label).selected(is_selected),
+                                    );
+
+                                    if resp.clicked() && row.has_keyfile {
+                                        picked = Some(row.name.clone());
+                                    }
+                                }
+
+                                if let Some(name) = picked {
+                                    self.clear_messages();
+                                    self.selected = Some(name);
+                                }
+                            });
+                    }
+
+                    ui.add_space(16.0);
+
+                    // Actions
+                    ui.horizontal(|ui| {
+                        if ui.button("Create new keyfile…").clicked() {
+                            self.clear_messages();
+                            *route = Route::CreateKeyfile;
                         }
-                    }
 
-                    if let Some(name) = picked {
-                        self.clear_messages();
-                        self.selected = Some(name);
-                    }
+                        let can_select = self.selected.is_some();
+
+                        if ui
+                            .add_enabled(can_select, egui::Button::new("Select"))
+                            .clicked()
+                        {
+                            self.clear_messages();
+
+                            let Some(name) = self.selected.clone() else {
+                                self.msg.set_warn("Select a keyfile first.");
+                                return;
+                            };
+
+                            match select_keyfile_dir(state, ctx, &name) {
+                                Ok(KeyfileState::NotCorrupted) => {
+                                    *return_route = Some(Route::Sign);
+                                    *route = Route::Locked;
+                                }
+
+                                Ok(KeyfileState::Missing) => {
+                                    self.msg
+                                        .set_warn("Selected keyfile is missing. Choose another.");
+                                    self.selected = None;
+                                    self.refresh_on_enter(ctx);
+                                    *route = Route::KeyfileSelect;
+                                }
+
+                                Ok(KeyfileState::Corrupted) => {
+                                    self.set_quarantined_message(&name);
+                                    self.selected = None;
+                                    self.refresh_on_enter(ctx);
+                                    *route = Route::KeyfileSelect;
+                                }
+
+                                Err(AppError::KeyfileQuarantined { dir_name }) => {
+                                    self.set_quarantined_message(&dir_name);
+                                    self.selected = None;
+                                    self.refresh_on_enter(ctx);
+                                    *route = Route::KeyfileSelect;
+                                }
+
+                                Err(e) => {
+                                    self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
+                                    *route = Route::KeyfileSelect;
+                                }
+                            }
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    self.msg.show(ui, false);
                 });
-
-            ui.add_space(12.0);
-        }
-
-        let can_select = self.selected.is_some();
-
-        if ui
-            .add_enabled(can_select, egui::Button::new("Select"))
-            .clicked()
-        {
-            self.clear_messages();
-
-            let Some(name) = self.selected.clone() else {
-                self.msg.set_warn("Select a keyfile first.");
-                return;
-            };
-
-            // Set selection in context
-            match select_keyfile_dir(state, ctx, &name) {
-                Ok(KeyfileState::NotCorrupted) => {
-                    *return_route = Some(Route::Sign);
-                    *route = Route::Locked;
-                }
-
-                Ok(KeyfileState::Missing) => {
-                    // Should be rare (race / manual deletion). Keep user here.
-                    self.msg.set_warn(
-                        "Selected keyfile is missing. Choose another or create a new one.",
-                    );
-                    self.selected = None;
-                    self.refresh_on_enter(ctx);
-                    *route = Route::KeyfileSelect;
-                }
-
-                Ok(KeyfileState::Corrupted) => {
-                    // Treat as non-selectable outcome; keep user here and show the quarantine-style message.
-                    self.set_quarantined_message(&name);
-                    self.selected = None;
-                    self.refresh_on_enter(ctx);
-                    *route = Route::KeyfileSelect;
-                }
-
-                Err(AppError::KeyfileQuarantined { dir_name }) => {
-                    self.set_quarantined_message(&dir_name);
-                    self.selected = None;
-                    self.refresh_on_enter(ctx);
-                    *route = Route::KeyfileSelect;
-                }
-
-                Err(e) => {
-                    self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
-                    // stay on KeyfileSelect
-                    *route = Route::KeyfileSelect;
-                }
-            }
-        }
-
-        if ui.button("Create new keyfile…").clicked() {
-            self.clear_messages();
-            *route = Route::CreateKeyfile;
-        }
-
-        self.msg.show(ui, false);
+            });
+        });
     }
 }

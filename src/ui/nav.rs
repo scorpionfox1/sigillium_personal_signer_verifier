@@ -7,7 +7,7 @@ use eframe::egui;
 #[derive(Clone, Copy, Debug)]
 pub struct NavModel {
     pub show_nav_tabs: bool,
-    pub keyfile_selected: bool,
+    pub _keyfile_selected: bool,
 }
 
 pub struct LeftNav;
@@ -29,8 +29,7 @@ impl LeftNav {
             .resizable(false)
             .min_width(160.0)
             .show(ctx, |ui| {
-                // Hide everything until a keyfile is selected.
-                if !model.keyfile_selected {
+                if !model.show_nav_tabs {
                     return;
                 }
 
