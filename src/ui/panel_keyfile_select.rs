@@ -144,60 +144,61 @@ impl KeyfileSelectPanel {
                     ui.add_space(16.0);
 
                     // Actions
-                    ui.horizontal(|ui| {
-                        if ui.button("Create new keyfile…").clicked() {
-                            self.clear_messages();
-                            *route = Route::CreateKeyfile;
-                        }
 
-                        let can_select = self.selected.is_some();
+                    let can_select = self.selected.is_some();
 
-                        if ui
-                            .add_enabled(can_select, egui::Button::new("Select"))
-                            .clicked()
-                        {
-                            self.clear_messages();
+                    if ui
+                        .add_enabled(can_select, egui::Button::new("Select"))
+                        .clicked()
+                    {
+                        self.clear_messages();
 
-                            let Some(name) = self.selected.clone() else {
-                                self.msg.set_warn("Select a keyfile first.");
-                                return;
-                            };
+                        let Some(name) = self.selected.clone() else {
+                            self.msg.set_warn("Select a keyfile first.");
+                            return;
+                        };
 
-                            match select_keyfile_dir(state, ctx, &name) {
-                                Ok(KeyfileState::NotCorrupted) => {
-                                    *return_route = Some(Route::Sign);
-                                    *route = Route::Locked;
-                                }
+                        match select_keyfile_dir(state, ctx, &name) {
+                            Ok(KeyfileState::NotCorrupted) => {
+                                *return_route = Some(Route::Sign);
+                                *route = Route::Locked;
+                            }
 
-                                Ok(KeyfileState::Missing) => {
-                                    self.msg
-                                        .set_warn("Selected keyfile is missing. Choose another.");
-                                    self.selected = None;
-                                    self.refresh_on_enter(ctx);
-                                    *route = Route::KeyfileSelect;
-                                }
+                            Ok(KeyfileState::Missing) => {
+                                self.msg
+                                    .set_warn("Selected keyfile is missing. Choose another.");
+                                self.selected = None;
+                                self.refresh_on_enter(ctx);
+                                *route = Route::KeyfileSelect;
+                            }
 
-                                Ok(KeyfileState::Corrupted) => {
-                                    self.set_quarantined_message(&name);
-                                    self.selected = None;
-                                    self.refresh_on_enter(ctx);
-                                    *route = Route::KeyfileSelect;
-                                }
+                            Ok(KeyfileState::Corrupted) => {
+                                self.set_quarantined_message(&name);
+                                self.selected = None;
+                                self.refresh_on_enter(ctx);
+                                *route = Route::KeyfileSelect;
+                            }
 
-                                Err(AppError::KeyfileQuarantined { dir_name }) => {
-                                    self.set_quarantined_message(&dir_name);
-                                    self.selected = None;
-                                    self.refresh_on_enter(ctx);
-                                    *route = Route::KeyfileSelect;
-                                }
+                            Err(AppError::KeyfileQuarantined { dir_name }) => {
+                                self.set_quarantined_message(&dir_name);
+                                self.selected = None;
+                                self.refresh_on_enter(ctx);
+                                *route = Route::KeyfileSelect;
+                            }
 
-                                Err(e) => {
-                                    self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
-                                    *route = Route::KeyfileSelect;
-                                }
+                            Err(e) => {
+                                self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
+                                *route = Route::KeyfileSelect;
                             }
                         }
-                    });
+                    }
+
+                    ui.add_space(12.0);
+
+                    if ui.button("Create new keyfile…").clicked() {
+                        self.clear_messages();
+                        *route = Route::CreateKeyfile;
+                    }
 
                     ui.add_space(8.0);
                     self.msg.show(ui, false);

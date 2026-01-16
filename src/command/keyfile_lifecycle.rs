@@ -1,6 +1,5 @@
 // src/command/keyfile_lifecycle.rs
 
-use crate::command::keyfile_inspect::refresh_keyfile_state;
 use crate::context::AppCtx;
 use crate::error::{AppError, AppResult};
 use crate::fs_hardening::enforce_keyfile_perms_best_effort;
@@ -36,7 +35,6 @@ pub fn create_keyfile(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppRe
 
         lock_app_inner_if_unlocked(state, "create_keyfile").map_err(AppError::Msg)?;
 
-        let _ = refresh_keyfile_state(state, ctx)?;
         Ok(())
     })();
 
@@ -49,7 +47,7 @@ pub fn quarantine_keyfile_now(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
         .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
 
     backup_keyfile_with_quarantine_prefix(&keyfile_path)?;
-    let _ = refresh_keyfile_state(state, ctx);
+    ctx.set_selected_keyfile_dir(None);
     lock_app_inner_if_unlocked(state, "keyfile integrity failure").map_err(AppError::Msg)?;
     Ok(())
 }

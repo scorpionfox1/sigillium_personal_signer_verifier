@@ -3,17 +3,18 @@
 use crate::{
     context::AppCtx,
     error::{AppError, AppResult},
-    keyfile::check_keyfile_state,
-    types::{AppState, KeyfileState},
+    types::AppState,
 };
 
-pub fn refresh_keyfile_state(state: &AppState, ctx: &AppCtx) -> AppResult<KeyfileState> {
+use crate::keyfile::ops::inspect::inspect_keyfile;
+
+pub fn inspect_selected_keyfile(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
     let keyfile_path = ctx
         .current_keyfile_path()
         .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
 
-    let ks = match check_keyfile_state(&keyfile_path) {
-        Ok(ks) => ks,
+    match inspect_keyfile(&keyfile_path) {
+        Ok(()) => Ok(()),
         Err(_e) => {
             let dir_name = ctx
                 .selected_keyfile_dir()
@@ -22,81 +23,7 @@ pub fn refresh_keyfile_state(state: &AppState, ctx: &AppCtx) -> AppResult<Keyfil
 
             let _ = crate::command::keyfile_lifecycle::quarantine_keyfile_now(state, ctx);
 
-            *state
-                .keyfile_state
-                .lock()
-                .map_err(|_| AppError::Msg("Internal state lock failed".into()))? =
-                KeyfileState::Missing;
-
-            return Err(AppError::KeyfileQuarantined { dir_name });
+            Err(AppError::KeyfileQuarantined { dir_name })
         }
-    };
-
-    *state
-        .keyfile_state
-        .lock()
-        .map_err(|_| AppError::Msg("Internal state lock failed".into()))? = ks;
-
-    Ok(ks)
-}
-
-// ======================================================
-// Unit Tests
-// ======================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::KeyfileState;
-    use crate::{context::AppCtx, types::AppState};
-    use std::fs;
-    use std::path::{Path, PathBuf};
-
-    fn mk_ctx_with_empty_dir(root: &Path, name: &str) -> AppCtx {
-        let kdir = root.join("keyfiles").join(name);
-        fs::create_dir_all(&kdir).expect("mkdir keyfile dir");
-
-        let mut ctx = AppCtx::new(root.to_path_buf());
-        ctx.set_selected_keyfile_dir_for_tests(PathBuf::from(name));
-        ctx
-    }
-
-    #[test]
-    fn refresh_keyfile_state_reports_missing_when_no_keyfile_exists() {
-        let td_state = tempfile::tempdir().expect("tempdir state");
-        let td_keyfile = tempfile::tempdir().expect("tempdir keyfile");
-
-        let state = AppState::new_for_tests(td_state.path()).expect("init_state");
-        let ctx = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
-
-        let keyfile_path = ctx.current_keyfile_path().expect("current_keyfile_path");
-
-        // Ensure file truly doesn't exist.
-        assert!(
-            !keyfile_path.exists(),
-            "test assumes keyfile.json does not exist"
-        );
-
-        let ks = refresh_keyfile_state(&state, &ctx).expect("refresh_keyfile_state");
-        assert_eq!(ks, KeyfileState::Missing);
-    }
-
-    #[test]
-    fn refresh_keyfile_state_reports_not_corrupted_when_keyfile_path_exists() {
-        let td_state = tempfile::tempdir().expect("tempdir state");
-        let td_keyfile = tempfile::tempdir().expect("tempdir keyfile");
-
-        let state = AppState::new_for_tests(td_state.path()).expect("init_state");
-
-        // Create a valid keyfile using existing test fixture helpers.
-        let fx = crate::keyfile::ops::test_support::mk_fixture("passphrase").expect("mk_fixture");
-
-        let ctx = mk_ctx_with_empty_dir(td_keyfile.path(), "k1");
-        let dst = ctx.current_keyfile_path().expect("current_keyfile_path");
-        fs::copy(&fx.path, &dst).expect("copy fixture keyfile");
-        assert!(dst.exists());
-
-        let ks = refresh_keyfile_state(&state, &ctx).expect("refresh_keyfile_state");
-        assert_eq!(ks, KeyfileState::NotCorrupted);
     }
 }

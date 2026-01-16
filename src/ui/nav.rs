@@ -7,7 +7,6 @@ use eframe::egui;
 #[derive(Clone, Copy, Debug)]
 pub struct NavModel {
     pub show_nav_tabs: bool,
-    pub _keyfile_selected: bool,
 }
 
 pub struct LeftNav;
@@ -37,6 +36,7 @@ impl LeftNav {
                     ui.available_size(),
                     egui::Layout::bottom_up(egui::Align::Min),
                     |ui| {
+                        ui.add_space(6.0);
                         // Bottom-pinned: Secure Close
                         if ui.button("Secure Close").clicked() {
                             *secure_close_requested = true;
@@ -59,14 +59,12 @@ impl LeftNav {
 
                             ui.separator();
 
-                            if model.show_nav_tabs {
-                                ui.add_enabled_ui(!is_locked, |ui| {
-                                    nav_btn(ui, route, Route::Sign, "Sign");
-                                    nav_btn(ui, route, Route::Verify, "Verify");
-                                    nav_btn(ui, route, Route::KeyRegistry, "Key Registry");
-                                    nav_btn(ui, route, Route::Security, "Security");
-                                });
-                            }
+                            ui.add_enabled_ui(!is_locked, |ui| {
+                                nav_btn(ui, route, Route::Sign, "Sign");
+                                nav_btn(ui, route, Route::Verify, "Verify");
+                                nav_btn(ui, route, Route::KeyRegistry, "Key Registry");
+                                nav_btn(ui, route, Route::Security, "Security");
+                            });
                         });
                     },
                 );

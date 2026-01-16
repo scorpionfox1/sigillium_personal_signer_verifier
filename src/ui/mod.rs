@@ -128,25 +128,15 @@ impl UiApp {
             .map(|g| g.unlocked)
             .unwrap_or(false);
 
-        let keyfile_state = self
-            .state
-            .keyfile_state
-            .lock()
-            .map(|g| *g)
-            .unwrap_or(KeyfileState::Missing);
-
         RouteCtx {
             keyfile_selected: self.ctx.is_keyfile_selected(),
             unlocked,
-            keyfile_state,
         }
     }
 
     fn derive_nav_model(&self, rctx: RouteCtx) -> NavModel {
         NavModel {
-            _keyfile_selected: rctx.keyfile_selected,
-            show_nav_tabs: rctx.keyfile_selected
-                && rctx.keyfile_state == KeyfileState::NotCorrupted,
+            show_nav_tabs: rctx.keyfile_selected,
         }
     }
 
@@ -202,28 +192,11 @@ impl eframe::App for UiApp {
             }
             self.best_effort_warn.clear();
 
-            let guarded = apply_route_guards(self.route, rctx);
+            let guarded = apply_route_guards(&rctx, self.route);
 
-            // Case 1: route guard forced us to KeyfileSelect
+            // If the guard changed the route, apply it.
             if guarded != self.route {
-                if guarded == Route::KeyfileSelect
-                    && rctx.keyfile_selected
-                    && rctx.keyfile_state != KeyfileState::NotCorrupted
-                {
-                    if let Some(dir_name) = self.current_selected_keyfile_dir_name() {
-                        self.keyfile_select.set_quarantined_message(&dir_name);
-                    }
-                }
                 self.route = guarded;
-            }
-            // Case 2: panel explicitly routed us to KeyfileSelect (e.g. sign / verify / registry)
-            else if self.route == Route::KeyfileSelect
-                && rctx.keyfile_selected
-                && rctx.keyfile_state != KeyfileState::NotCorrupted
-            {
-                if let Some(dir_name) = self.current_selected_keyfile_dir_name() {
-                    self.keyfile_select.set_quarantined_message(&dir_name);
-                }
             }
 
             if self.route == Route::KeyfileSelect {

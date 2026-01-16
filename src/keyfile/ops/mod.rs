@@ -18,7 +18,6 @@ pub mod test_support;
 // Re-exports (public API surface)
 // ======================================================
 
-pub use inspect::check_keyfile_state;
 pub use inspect::decrypt_key_material;
 pub use inspect::list_key_meta;
 pub use inspect::read_json_verified_optional_mac;
