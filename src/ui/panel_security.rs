@@ -1,7 +1,6 @@
 // src/ui/panel_security.rs
 
 use eframe::egui;
-use sigillium_personal_signer_verifier_lib::types::KeyfileState;
 use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
@@ -122,7 +121,7 @@ impl SecurityPanel {
         ui: &mut egui::Ui,
         state: &AppState,
         ctx: &AppCtx,
-        route: &mut Route,
+        _route: &mut Route,
     ) {
         ui.label("Change passphrase");
         ui.add_space(6.0);
@@ -175,20 +174,12 @@ impl SecurityPanel {
             {
                 self.clear_messages();
 
-                let (ks, res) = command::change_passphrase(
+                let res = command::change_passphrase(
                     self.old_pass.trim(),
                     self.new_pass.trim(),
                     state,
                     ctx,
                 );
-
-                if let Ok(mut g) = state.keyfile_state.lock() {
-                    *g = ks;
-                }
-
-                if ks != KeyfileState::NotCorrupted {
-                    *route = Route::CreateKeyfile;
-                }
 
                 match res {
                     Ok(()) => {

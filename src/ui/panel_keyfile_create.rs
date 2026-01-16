@@ -41,17 +41,6 @@ impl CreateKeyfilePanel {
         ui.heading("Create keyfile");
         ui.separator();
 
-        // If we detected corruption/tampering, tell the user why they're here.
-        if let Ok(ks) = state.keyfile_state.lock() {
-            if *ks == sigillium_personal_signer_verifier_lib::types::KeyfileState::Corrupted {
-                ui.horizontal(|ui| {
-                    ui.colored_label(egui::Color32::YELLOW, "Warn:");
-                    ui.label("Your current keyfile appears corrupted (or has been tampered with). Create a new keyfile to continue.");
-                });
-                ui.add_space(8.0);
-            }
-        }
-
         let mask = !self.show_passphrase;
 
         ui.label("Keyfile name");
@@ -123,10 +112,6 @@ impl CreateKeyfilePanel {
                     self.reset_inputs();
                     *route = Route::KeyfileSelect;
                     ctx.set_selected_keyfile_dir(None);
-
-                    if let Ok(mut ks) = state.keyfile_state.lock() {
-                        *ks = sigillium_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted;
-                    }
                 }
                 Err(e) => {
                     // Do not leave a selected keyfile dir pointing at a failed create attempt.

@@ -2,11 +2,7 @@
 
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
-    command,
-    command_state::lock_session,
-    context::AppCtx,
-    error::AppError,
-    types::{self, AppState},
+    command, command_state::lock_session, context::AppCtx, error::AppError, types::AppState,
 };
 
 use super::Route;
@@ -229,7 +225,8 @@ impl KeyRegistryPanel {
                                 let assoc_opt = if assoc.is_empty() { None } else { Some(assoc) };
 
                                 // IMPORTANT: pass domain exactly as entered; command decides whether to normalize/validate.
-                                let (ks, res) = command::install_key(
+                                let res = command::install_key(
+
                                     mnemonic,
                                     &self.domain,
                                     label,
@@ -239,13 +236,7 @@ impl KeyRegistryPanel {
                                     ctx,
                                 );
 
-                                if let Ok(mut g) = state.keyfile_state.lock() {
-                                    *g = ks;
-                                }
-
-                                if ks
-                                    != sigillium_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted
-                                {
+                                if res.is_err() {
                                     *route = Route::KeyfileSelect;
                                 }
 
@@ -339,15 +330,7 @@ impl KeyRegistryPanel {
                                     self.confirm_uninstall = false;
                                     self.clear_messages();
 
-                                    let (ks, res) = command::uninstall_active_key(state, ctx);
-
-                                    if let Ok(mut g) = state.keyfile_state.lock() {
-                                        *g = ks;
-                                    }
-
-                                    if ks != types::KeyfileState::NotCorrupted {
-                                        *route = Route::KeyfileSelect;
-                                    }
+                                    let res = command::uninstall_active_key(state, ctx);
 
                                     match res {
                                         Ok(()) => {

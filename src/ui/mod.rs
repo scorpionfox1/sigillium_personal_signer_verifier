@@ -33,7 +33,7 @@ use panel_verify::VerifyPanel;
 use sigillium_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
 use sigillium_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
-use sigillium_personal_signer_verifier_lib::types::{AppState, KeyfileState};
+use sigillium_personal_signer_verifier_lib::types::AppState;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route {
@@ -82,10 +82,6 @@ impl UiApp {
 
         // Explicitly start with "no keyfile selected" and route to KeyfileSelect.
         ctx.set_selected_keyfile_dir(None);
-
-        if let Ok(mut g) = state.keyfile_state.lock() {
-            *g = KeyfileState::Missing;
-        }
 
         let route = Route::KeyfileSelect;
 

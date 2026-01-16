@@ -8,7 +8,7 @@ use sigillium_personal_signer_verifier_lib::{
     context::AppCtx,
     error::AppError,
     keyfile_store::{KeyfileDirRow, KeyfileStore},
-    types::{AppState, KeyfileState},
+    types::AppState,
 };
 
 pub struct KeyfileSelectPanel {
@@ -159,33 +159,23 @@ impl KeyfileSelectPanel {
                         };
 
                         match select_keyfile_dir(state, ctx, &name) {
-                            Ok(KeyfileState::NotCorrupted) => {
+                            Ok(()) => {
                                 *return_route = Some(Route::Sign);
                                 *route = Route::Locked;
                             }
-
-                            Ok(KeyfileState::Missing) => {
-                                self.msg
-                                    .set_warn("Selected keyfile is missing. Choose another.");
-                                self.selected = None;
-                                self.refresh_on_enter(ctx);
-                                *route = Route::KeyfileSelect;
-                            }
-
-                            Ok(KeyfileState::Corrupted) => {
-                                self.set_quarantined_message(&name);
-                                self.selected = None;
-                                self.refresh_on_enter(ctx);
-                                *route = Route::KeyfileSelect;
-                            }
-
                             Err(AppError::KeyfileQuarantined { dir_name }) => {
                                 self.set_quarantined_message(&dir_name);
                                 self.selected = None;
                                 self.refresh_on_enter(ctx);
                                 *route = Route::KeyfileSelect;
                             }
-
+                            Err(AppError::KeyfileMissing { .. }) => {
+                                self.msg
+                                    .set_warn("Selected keyfile is missing. Choose another.");
+                                self.selected = None;
+                                self.refresh_on_enter(ctx);
+                                *route = Route::KeyfileSelect;
+                            }
                             Err(e) => {
                                 self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
                                 *route = Route::KeyfileSelect;

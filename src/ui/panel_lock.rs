@@ -6,10 +6,7 @@ use super::Route;
 use eframe::egui;
 
 use sigillium_personal_signer_verifier_lib::{
-    command,
-    context::AppCtx,
-    error::AppError,
-    types::{AppState, KeyfileState},
+    command, context::AppCtx, error::AppError, types::AppState,
 };
 
 pub struct LockPanel {
@@ -74,18 +71,8 @@ impl LockPanel {
 
             match command::unlock_app(&self.passphrase, state, ctx) {
                 Ok(()) => {
-                    // If the keyfile is good, proceed to the intended route.
-                    // Otherwise, we will fall through to the keyfile_state guard below.
-                    let ks_ok = state
-                        .keyfile_state
-                        .lock()
-                        .map(|ks| *ks == KeyfileState::NotCorrupted)
-                        .unwrap_or(false);
-
-                    if ks_ok {
-                        self.msg.clear();
-                        *route = return_route.take().unwrap_or(Route::Sign);
-                    }
+                    self.msg.clear();
+                    *route = return_route.take().unwrap_or(Route::Sign);
                 }
 
                 Err(AppError::KeyfileQuarantined { .. }) => {
@@ -95,17 +82,14 @@ impl LockPanel {
                     *route = Route::KeyfileSelect;
                 }
 
-                Err(e) => {
-                    self.msg.from_app_error(&e, ctx.debug_ui);
-                }
-            }
-
-            // If the command layer updated keyfile_state to Missing/Corrupted, force the
-            // user into keyfile selection (never CreateKeyfile automatically).
-            if let Ok(ks) = state.keyfile_state.lock() {
-                if matches!(*ks, KeyfileState::Missing | KeyfileState::Corrupted) {
+                Err(AppError::KeyfileMissing { .. }) => {
+                    self.msg.clear();
                     *return_route = None;
                     *route = Route::KeyfileSelect;
+                }
+
+                Err(e) => {
+                    self.msg.from_app_error(&e, ctx.debug_ui);
                 }
             }
 

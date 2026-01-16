@@ -54,21 +54,20 @@ pub fn active_key_selector(
     if choice != current_active_id {
         match choice {
             Some(id) => {
-                let (ks, res) = command::select_active_key(id, state, ctx);
+                let res = command::select_active_key(id, state, ctx);
 
-                // persist keyfile state
-                if let Ok(mut g) = state.keyfile_state.lock() {
-                    *g = ks;
-                }
-
-                // if missing/corrupted, clear active key + route to CreateKeyfile
-                if ks != sigillium_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted {
+                // If select failed due to quarantine/missing, clear active key and route to KeyfileSelect.
+                if matches!(
+                    res,
+                    Err(AppError::KeyfileQuarantined { .. } | AppError::KeyfileMissing { .. })
+                ) {
                     let _ = command::clear_active_key(state);
-                    *route = super::Route::CreateKeyfile;
+                    *route = super::Route::KeyfileSelect;
                 }
 
                 res.map(|_| Some(id)).map_err(|e| e)
             }
+
             None => command::clear_active_key(state)
                 .map(|_| None)
                 .map_err(|e| e),
