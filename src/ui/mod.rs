@@ -65,6 +65,7 @@ pub struct UiApp {
     security: SecurityPanel,
     last_activity: Instant,
     best_effort_warn: PanelMsgState,
+    secure_close_requested: bool,
 }
 
 impl UiApp {
@@ -105,6 +106,7 @@ impl UiApp {
             security: SecurityPanel::new(),
             last_activity: Instant::now(),
             best_effort_warn: PanelMsgState::default(),
+            secure_close_requested: false,
         }
     }
 
@@ -224,6 +226,10 @@ impl eframe::App for UiApp {
                 }
             }
 
+            if self.route == Route::KeyfileSelect {
+                self.keyfile_select.refresh_on_enter(&self.ctx);
+            }
+
             if entering_locked(self.prev_route, self.route) {
                 let _ = lock_app_inner_if_unlocked(self.state.as_ref(), "ui_enter_locked");
                 self.reset_all_inputs();
@@ -239,7 +245,29 @@ impl eframe::App for UiApp {
         }
 
         let nav_model = self.derive_nav_model(rctx);
-        self.nav.ui(ctx, nav_model, &mut self.route);
+        self.nav.ui(
+            ctx,
+            nav_model,
+            &mut self.route,
+            &mut self.secure_close_requested,
+        );
+
+        if self.secure_close_requested {
+            self.secure_close_requested = false;
+
+            match sigillium_personal_signer_verifier_lib::command::session::secure_prepare_for_quit(
+                self.state.as_ref(),
+            ) {
+                Ok(()) => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    return;
+                }
+                Err(e) => {
+                    self.best_effort_warn
+                        .set_warn(&format!("Secure close failed: {e}"));
+                }
+            }
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.best_effort_warn.show(ui, debug_ui);

@@ -7,7 +7,7 @@ use crate::error::{AppError, AppResult};
 use crate::keyfile;
 use crate::keyfile::{lock_private_key32_best_effort, unlock_private_key32_best_effort};
 use crate::security_log::record_best_effort_platform_failures;
-use crate::types::{AppState, KeyId, SecretsState};
+use crate::types::{AppState, KeyId, KeyfileState, SecretsState};
 use std::thread;
 use std::time::Duration;
 use zeroize::Zeroizing;
@@ -189,6 +189,30 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
     Ok(())
 }
 
-pub fn lock_and_quit(state: &AppState) -> AppResult<()> {
-    secure_shutdown_best_effort(state, "lock_and_quit").map_err(AppError::Msg)
+pub fn secure_prepare_for_quit(state: &AppState) -> AppResult<()> {
+    lock_app_inner_if_unlocked(state, "lock_and_quit").map_err(AppError::Msg)
+}
+
+pub fn select_keyfile_dir(
+    state: &AppState,
+    ctx: &AppCtx,
+    dir_name: &str,
+) -> AppResult<KeyfileState> {
+    let dir = ctx.keyfiles_root().join(dir_name);
+    ctx.set_selected_keyfile_dir(Some(dir));
+
+    // Force locked + clear secrets
+    lock_app_inner_if_unlocked(state, "select_keyfile").map_err(AppError::Msg)?;
+
+    // Inspect keyfile.json state
+    let ks = match ctx.current_keyfile_path() {
+        Some(p) => crate::keyfile::check_keyfile_state(&p).unwrap_or(KeyfileState::Corrupted),
+        None => KeyfileState::Missing,
+    };
+
+    if let Ok(mut g) = state.keyfile_state.lock() {
+        *g = ks;
+    }
+
+    Ok(ks)
 }

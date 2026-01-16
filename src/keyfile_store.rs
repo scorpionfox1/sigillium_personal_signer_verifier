@@ -10,6 +10,12 @@ pub struct KeyfileListing {
     pub dir: PathBuf,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyfileDirRow {
+    pub name: String,
+    pub has_keyfile: bool,
+}
+
 const TOMBSTONE_FILE: &str = "TOMBSTONE";
 
 // ------------------------------------------------------
@@ -32,6 +38,10 @@ impl KeyfileStore {
 
     pub fn list_keyfiles(&self) -> std::io::Result<Vec<String>> {
         list_keyfiles(&self.root)
+    }
+
+    pub fn list_keyfile_dirs(&self) -> std::io::Result<Vec<KeyfileDirRow>> {
+        list_keyfile_dirs(&self.root)
     }
 
     pub fn keyfile_name_exists(&self, name: &str) -> bool {
@@ -85,6 +95,39 @@ pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
     }
 
     out.sort();
+    Ok(out)
+}
+
+pub fn list_keyfile_dirs(keyfiles_root: &Path) -> std::io::Result<Vec<KeyfileDirRow>> {
+    let mut out = Vec::new();
+
+    if !keyfiles_root.exists() {
+        return Ok(out);
+    }
+
+    for entry in std::fs::read_dir(keyfiles_root)? {
+        let entry = entry?;
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+
+        let Some(name) = dir.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+
+        if validate_keyfile_dir_name(name).is_err() {
+            continue;
+        }
+
+        let has_keyfile = dir.join(KEYFILE_FILENAME).is_file();
+        out.push(KeyfileDirRow {
+            name: name.to_string(),
+            has_keyfile,
+        });
+    }
+
+    out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
 }
 
@@ -195,6 +238,8 @@ pub fn destroy_keyfile_dir_best_effort(dir: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::AppError;
+
     use super::*;
     use tempfile::tempdir;
 
@@ -260,6 +305,41 @@ mod tests {
     }
 
     #[test]
+    fn list_keyfile_dirs_includes_valid_dirs_and_marks_missing_keyfile() {
+        let td = tempdir().unwrap();
+        let root = td.path();
+
+        // valid named dirs
+        let a = root.join("a");
+        let b = root.join("b");
+        let c = root.join("c");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        std::fs::create_dir_all(&c).unwrap();
+
+        touch(&b.join(KEYFILE_FILENAME));
+
+        let got = list_keyfile_dirs(root).unwrap();
+        assert_eq!(
+            got,
+            vec![
+                KeyfileDirRow {
+                    name: "a".to_string(),
+                    has_keyfile: false
+                },
+                KeyfileDirRow {
+                    name: "b".to_string(),
+                    has_keyfile: true
+                },
+                KeyfileDirRow {
+                    name: "c".to_string(),
+                    has_keyfile: false
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn list_keyfiles_garbage_collects_tombstoned_dirs() {
         let td = tempdir().unwrap();
         let root = td.path();
@@ -273,6 +353,22 @@ mod tests {
         assert!(got.is_empty());
 
         // best-effort: likely removed
+        assert!(!doomed.exists());
+    }
+
+    #[test]
+    fn list_keyfile_dirs_garbage_collects_tombstoned_dirs() {
+        let td = tempdir().unwrap();
+        let root = td.path();
+
+        let doomed = root.join("doomed");
+        std::fs::create_dir_all(&doomed).unwrap();
+        touch(&doomed.join(TOMBSTONE_FILE));
+        touch(&doomed.join(KEYFILE_FILENAME));
+
+        let got = list_keyfile_dirs(root).unwrap();
+        assert!(got.is_empty());
+
         assert!(!doomed.exists());
     }
 

@@ -101,7 +101,6 @@ pub fn lock_app_inner(state: &AppState, context: &str) -> Result<(), String> {
         session.active_associated_key_id = None;
     }
 
-    // Refactored to use plural failure logging
     record_best_effort_platform_failures(
         state,
         context,
@@ -128,15 +127,6 @@ pub fn lock_app_inner_if_unlocked(state: &AppState, context: &str) -> Result<(),
     }
 
     Ok(())
-}
-
-// ======================================================
-// secure shutdown (best-effort)
-// ======================================================
-
-pub fn secure_shutdown_best_effort(state: &AppState, context: &str) -> Result<(), String> {
-    // Always attempt to clear secrets/session/keys, even if already locked.
-    lock_app_inner(state, context)
 }
 
 // ======================================================
@@ -255,7 +245,7 @@ mod tests {
         assert!(session.active_associated_key_id.is_none());
     }
 
-        #[test]
+    #[test]
     fn secure_shutdown_best_effort_clears_everything_even_if_locked() {
         let state = mk_state_locked();
 

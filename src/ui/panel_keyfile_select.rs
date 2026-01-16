@@ -4,14 +4,16 @@ use super::message::PanelMsgState;
 use super::Route;
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
+    command::session::select_keyfile_dir,
     context::AppCtx,
-    keyfile_store::KeyfileStore,
+    error::AppError,
+    keyfile_store::{KeyfileDirRow, KeyfileStore},
     types::{AppState, KeyfileState},
 };
 
 pub struct KeyfileSelectPanel {
     msg: PanelMsgState,
-    keyfiles: Vec<String>,
+    keyfiles: Vec<KeyfileDirRow>,
     selected: Option<String>,
     loaded: bool,
 }
@@ -43,21 +45,27 @@ impl KeyfileSelectPanel {
         ));
     }
 
+    // Called by the UI router when we land on this panel.
+    pub fn refresh_on_enter(&mut self, ctx: &AppCtx) {
+        self.refresh_list(ctx);
+    }
+
     fn refresh_list(&mut self, ctx: &AppCtx) {
         let store = KeyfileStore::new(ctx.keyfiles_root());
-        match store.list_keyfiles() {
+        match store.list_keyfile_dirs() {
             Ok(list) => {
                 self.keyfiles = list;
-                if self.keyfiles.is_empty() {
-                    self.selected = None;
-                } else if self.selected.as_deref().is_none()
-                    || !self
-                        .keyfiles
+
+                // Preserve selection only if it still exists and is selectable.
+                let keep = self.selected.as_deref().is_some_and(|sel| {
+                    self.keyfiles
                         .iter()
-                        .any(|k| Some(k.as_str()) == self.selected.as_deref())
-                {
-                    self.selected = Some(self.keyfiles[0].clone());
+                        .any(|row| row.has_keyfile && row.name == sel)
+                });
+                if !keep {
+                    self.selected = None;
                 }
+
                 self.loaded = true;
             }
             Err(e) => {
@@ -84,42 +92,48 @@ impl KeyfileSelectPanel {
             self.refresh_list(ctx);
         }
 
-        ui.horizontal(|ui| {
-            if ui.button("Refresh").clicked() {
-                self.clear_messages();
-                self.refresh_list(ctx);
-            }
-
-            if ui.button("Create new keyfile…").clicked() {
-                self.clear_messages();
-                *route = Route::CreateKeyfile;
-            }
-        });
-
         ui.add_space(12.0);
 
         if self.keyfiles.is_empty() {
             ui.label("No keyfiles found.");
             ui.label("Create a new keyfile to continue.");
-            self.msg.show(ui, false);
-            return;
+            ui.add_space(12.0);
+        } else {
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .max_height(260.0)
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+
+                    let mut picked: Option<String> = None;
+
+                    for row in self.keyfiles.iter() {
+                        let label = if row.has_keyfile {
+                            row.name.clone()
+                        } else {
+                            format!("{} (no keyfile)", row.name)
+                        };
+
+                        let is_selected = self.selected.as_deref() == Some(row.name.as_str());
+
+                        let resp = ui.add_enabled(
+                            row.has_keyfile,
+                            egui::Button::new(label).selected(is_selected),
+                        );
+
+                        if resp.clicked() && row.has_keyfile {
+                            picked = Some(row.name.clone());
+                        }
+                    }
+
+                    if let Some(name) = picked {
+                        self.clear_messages();
+                        self.selected = Some(name);
+                    }
+                });
+
+            ui.add_space(12.0);
         }
-
-        let selected_text = self
-            .selected
-            .as_deref()
-            .unwrap_or("Select a keyfile…")
-            .to_string();
-
-        egui::ComboBox::from_id_salt("keyfile_select_combo")
-            .selected_text(selected_text)
-            .show_ui(ui, |ui| {
-                for name in self.keyfiles.iter() {
-                    ui.selectable_value(&mut self.selected, Some(name.clone()), name);
-                }
-            });
-
-        ui.add_space(12.0);
 
         let can_select = self.selected.is_some();
 
@@ -135,32 +149,48 @@ impl KeyfileSelectPanel {
             };
 
             // Set selection in context
-            let dir = ctx.keyfiles_root().join(&name);
-            ctx.set_selected_keyfile_dir(Some(dir));
+            match select_keyfile_dir(state, ctx, &name) {
+                Ok(KeyfileState::NotCorrupted) => {
+                    *return_route = Some(Route::Sign);
+                    *route = Route::Locked;
+                }
 
-            // App becomes locked immediately + clear active material
-            if let Ok(mut s) = state.session.lock() {
-                s.unlocked = false;
-                s.active_key_id = None;
-                s.active_associated_key_id = None;
+                Ok(KeyfileState::Missing) => {
+                    // Should be rare (race / manual deletion). Keep user here.
+                    self.msg.set_warn(
+                        "Selected keyfile is missing. Choose another or create a new one.",
+                    );
+                    self.selected = None;
+                    self.refresh_on_enter(ctx);
+                    *route = Route::KeyfileSelect;
+                }
+
+                Ok(KeyfileState::Corrupted) => {
+                    // Treat as non-selectable outcome; keep user here and show the quarantine-style message.
+                    self.set_quarantined_message(&name);
+                    self.selected = None;
+                    self.refresh_on_enter(ctx);
+                    *route = Route::KeyfileSelect;
+                }
+
+                Err(AppError::KeyfileQuarantined { dir_name }) => {
+                    self.set_quarantined_message(&dir_name);
+                    self.selected = None;
+                    self.refresh_on_enter(ctx);
+                    *route = Route::KeyfileSelect;
+                }
+
+                Err(e) => {
+                    self.msg.set_warn(&format!("Failed to select keyfile: {e}"));
+                    // stay on KeyfileSelect
+                    *route = Route::KeyfileSelect;
+                }
             }
-            if let Ok(mut sec) = state.secrets.lock() {
-                *sec = None;
-            }
+        }
 
-            // Compute keyfile state for the selected keyfile.json
-            let ks = match ctx.current_keyfile_path() {
-                Some(p) => sigillium_personal_signer_verifier_lib::keyfile::check_keyfile_state(&p)
-                    .unwrap_or(KeyfileState::Corrupted),
-                None => KeyfileState::Missing,
-            };
-
-            if let Ok(mut g) = state.keyfile_state.lock() {
-                *g = ks;
-            }
-
-            *return_route = Some(Route::Sign);
-            *route = Route::Locked;
+        if ui.button("Create new keyfile…").clicked() {
+            self.clear_messages();
+            *route = Route::CreateKeyfile;
         }
 
         self.msg.show(ui, false);
