@@ -2,11 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{
-    error::{AppError, AppResult},
-    keyfile::KEYFILE_FILENAME,
-    platform::secure_delete_best_effort,
-};
+use crate::{error::AppResult, keyfile::KEYFILE_FILENAME, platform::secure_delete_best_effort};
 
 #[derive(Debug, Clone)]
 pub struct KeyfileListing {
@@ -149,21 +145,13 @@ pub fn keyfile_name_exists(keyfiles_root: &Path, name: &str) -> bool {
 // Directory ops (create / delete + tombstone)
 // ------------------------------------------------------
 
-pub fn create_keyfile_dir(keyfiles_root: &Path, name: &str) -> AppResult<PathBuf> {
-    validate_keyfile_dir_name(name).map_err(|_| AppError::KeyfileDirNameInvalid)?;
+pub fn create_keyfile_dir(root: &Path, name: &str) -> AppResult<PathBuf> {
+    let dir = root.join(name);
 
-    // Ensure root exists (store owns directory ops).
-    std::fs::create_dir_all(keyfiles_root)?;
+    // Directory existence is allowed.
+    // Keyfile existence is enforced at the file level.
+    std::fs::create_dir_all(&dir)?;
 
-    let dir = keyfiles_root.join(name);
-
-    if dir.exists() {
-        return Err(
-            std::io::Error::new(std::io::ErrorKind::AlreadyExists, "keyfile name exists").into(),
-        );
-    }
-
-    std::fs::create_dir(&dir)?;
     Ok(dir)
 }
 

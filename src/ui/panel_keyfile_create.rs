@@ -3,7 +3,7 @@
 use super::Route;
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
-    command, context::AppCtx, keyfile_store::KeyfileStore, types::AppState,
+    command, context::AppCtx, error::AppError, keyfile_store::KeyfileStore, types::AppState,
 };
 
 use super::message::PanelMsgState;
@@ -125,7 +125,16 @@ impl CreateKeyfilePanel {
                     }
                 }
                 Err(e) => {
-                    self.msg.from_app_error(&e, ctx.debug_ui);
+                    // Do not leave a selected keyfile dir pointing at a failed create attempt.
+                    ctx.set_selected_keyfile_dir(None);
+
+                    if matches!(e, AppError::KeyfileAlreadyExists) {
+                        self.msg.set_warn(
+                            "A keyfile with that name already exists. Choose a different name.",
+                        );
+                    } else {
+                        self.msg.from_app_error(&e, ctx.debug_ui);
+                    }
                 }
             }
 

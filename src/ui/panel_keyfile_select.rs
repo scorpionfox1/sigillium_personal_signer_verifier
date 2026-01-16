@@ -69,7 +69,14 @@ impl KeyfileSelectPanel {
         }
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        state: &AppState,
+        ctx: &AppCtx,
+        route: &mut Route,
+        return_route: &mut Option<Route>,
+    ) {
         ui.heading("Select keyfile");
         ui.separator();
 
@@ -152,6 +159,7 @@ impl KeyfileSelectPanel {
                 *g = ks;
             }
 
+            *return_route = Some(Route::Sign);
             *route = Route::Locked;
         }
 

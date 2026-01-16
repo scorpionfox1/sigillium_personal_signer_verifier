@@ -245,10 +245,13 @@ impl eframe::App for UiApp {
             self.best_effort_warn.show(ui, debug_ui);
 
             match self.route {
-                Route::KeyfileSelect => {
-                    self.keyfile_select
-                        .ui(ui, self.state.as_ref(), &self.ctx, &mut self.route)
-                }
+                Route::KeyfileSelect => self.keyfile_select.ui(
+                    ui,
+                    self.state.as_ref(),
+                    &self.ctx,
+                    &mut self.route,
+                    &mut self.return_route,
+                ),
 
                 Route::CreateKeyfile => {
                     self.create_keyfile
@@ -256,13 +259,14 @@ impl eframe::App for UiApp {
                 }
 
                 Route::Locked => {
-                    if self.last_route != Route::Locked {
+                    if self.last_route != Route::Locked && self.return_route.is_none() {
                         self.return_route = Some(if self.last_route == Route::CreateKeyfile {
                             Route::Sign
                         } else {
                             self.last_route
                         });
                     }
+
                     self.lock.ui(
                         ui,
                         self.state.as_ref(),
