@@ -1,24 +1,24 @@
 # Sigillium Personal Signer / Verifier
 
-A local desktop tool for managing **ed25519 signing keys** and producing **verifiable digital signatures**.
+A local desktop tool for managing **ed25519** signing keys and producing verifiable digital signatures.
 
-Sigillium Personal Signer / Verifier is designed for users who want **direct control over their keys**, **clear signing semantics**, and **offline operation**—without relying on web services, background agents, or remote infrastructure.
+Sigillium Personal Signer / Verifier is designed for users who want direct control over their keys, clear signing semantics, and offline operation—without relying on web services, background agents, or remote infrastructure.
 
-The application was originally built to support a broader ecosystem where keys are installed, registered, and rotated over time, but its functionality is general enough to be used as a standalone signer/verifier.
+The application was originally built to support a broader ecosystem of registries where public keys are installed, registered, and rotated over time, but its functionality is general enough to be used as a standalone signer/verifier.
 
 ---
 
 ## What this app does
 
-- Stores **multiple ed25519 keys** in a local encrypted keyfile.
-- Allows you to **sign messages** and copy/paste the resulting signature.
-- Allows you to **verify signatures** against:
+- Stores **multiple ed25519 keys in a local encrypted keyfile.
+- Allows you to sign messages and copy/paste the resulting signature.
+- Allows you to verify signatures against:
   - the active key’s public key, or
   - a user-supplied public key.
 - Supports signing and verifying:
-  - **Plain text**
-  - **JSON**, with deterministic canonicalization.
-- Optionally validates JSON against a **JSON Schema at signing time**.
+  - Plain text
+  - JSON, with deterministic canonicalization.
+- Optionally validates JSON against a JSON Schema at signing time.
 
 The app is **local-only**: no network access, no background services, no remote dependencies.
 
@@ -28,27 +28,39 @@ The app is **local-only**: no network access, no background services, no remote 
 
 The application is organized around a small set of focused operations:
 
-- Creating and unlocking an encrypted keyfile
+- Selecting or creating a keyfile at application startup
+- Unlocking an encrypted keyfile
 - Installing, selecting, and uninstalling keys
 - Signing and verifying text or JSON payloads
 - Performing security-sensitive actions such as passphrase changes or keyfile destruction
+
+Once a keyfile is selected, it remains active for the duration of the app session.  
+Switching to a different keyfile requires closing and reopening the application.
 
 Private key material is only available while the application is explicitly unlocked.
 
 ---
 
+## Multiple keyfiles and shared systems
+
+The application supports multiple encrypted keyfiles under a single OS user account.
+
+This is a deliberate, pragmatic design choice intended to support real-world environments where more than one person may share the same desktop credentials (for example, small offices or shared workstations).
+
+---
+
 ## Key model and identity intent
 
-Keys in this app are intended to be human-installed and externally registered with other 3rd party services.
+Keys in this app are intended to be human-installed and externally registered with third-party services.
 
 Each stored key includes:
 
 - **Internal key ID**  
-  A monotonic identifier intended to represent keys in the drop down selector in the app ui.
+  A monotonic identifier intended to represent keys in the drop-down selector in the app UI.
 
 - **Domain**  
   A user-supplied domain string that is cryptographically bound into key derivation and metadata.  
-  This helps prevent accidental cross-context key reuse.
+  The application does not inject any app-specific domain text. This is intentional, and allows keys to be used cleanly with independent, third-party registries without cross-application interference.
 
 - **Associated Key ID (optional)**  
   A user-defined identifier representing a **durable external identity**.  
@@ -58,7 +70,7 @@ Each stored key includes:
   A human-friendly name.
 
 Public keys are stored in the clear.  
-Private keys are stored **encrypted at rest**.
+Private keys are stored encrypted at rest.
 
 ### Key installation
 
@@ -77,19 +89,16 @@ Importing raw private keys may be added in the future but is not part of v1.
 When signing in JSON mode:
 - A schema may be supplied by the user.
 - If the JSON payload does **not** validate against the schema, signing is blocked.
-- Schema validation is a **signing-time safety check**, not a verification requirement.
+- Schema validation is a signing-time safety check, not a verification requirement.
 
 ### Signature encoding
 - Signatures are produced and verified in **base64**.
-- Base64 is the canonical format for copy/paste and interoperability.
 
 ---
 
 ## Security posture
 
-This application aims to be:
-
-> **Better than “good enough” for software-based key handling, but not HSM-grade.**
+This application aims to be better than “good enough” for software-based key handling, but not HSM-grade.
 
 It is designed for careful users on general-purpose operating systems who follow basic operational security practices (e.g. securely storing physical copies of mnemonics).
 
@@ -114,20 +123,21 @@ It is designed for careful users on general-purpose operating systems who follow
 
 ### Best-effort failure logging
 
-Failures of security hardening steps are recorded in a persistent log and surfaced in the Security panel.  
-The log is intentionally narrow in scope and limited to security-relevant events.
+Failures of best-effort security hardening steps are recorded in a persistent security log and surfaced in the Security panel.
+
+This log reflects how effectively the host system supports available security mechanisms. The log being made up of system failures, it is not specific to any particular keyfile.
 
 ### What the app does *not* claim
 
 - Resistance to a compromised host OS.
 - Protection against physical or forensic attacks.
-- Hardware-backed key isolation.
 
 ---
 
 ## Data location
 
-- The encrypted keyfile is stored in the OS-appropriate application data directory.
+- Encrypted keyfiles are stored under the OS-appropriate application data directory.
+- A single security log is shared across all keyfiles for the OS user.
 - File permissions are restricted where supported.
 
 ---
@@ -141,11 +151,11 @@ No specific features are committed beyond the existing signing model.
 
 ## Platform status
 
-Sigillium Personal Signer / Verifier is distributed as **precompiled executables for Linux, Windows, and macOS**. However, this project is actively developed and routinely tested on Linux. While CI produces builds for Windows and macOS, those platforms are currently best-effort and may have rough edges (installer behavior, key storage, OS hardening, etc.). If you run the app on Windows/macOS, treat it as experimental and file issues with details about your OS version and logs.
+Sigillium Personal Signer / Verifier is distributed as precompiled executables for Linux, Windows, and macOS. However, this project is actively developed and routinely tested on Linux. While CI produces builds for Windows and macOS, those platforms are currently best-effort and may have rough edges (installer behavior, key storage, OS hardening, etc.). If you run the app on Windows/macOS, treat it as experimental and file issues with details about your OS version and logs.
 
 ---
 
-Project status
+## Project status
 
 This project is pre-1.0.
 
