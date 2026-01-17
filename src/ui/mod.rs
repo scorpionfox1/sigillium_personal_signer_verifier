@@ -238,6 +238,25 @@ impl eframe::App for UiApp {
             }
         }
 
+        // ------------------------------------------------------------------
+        // Keyfile footer (reserved bottom area; never clipped by ScrollAreas)
+        // ------------------------------------------------------------------
+        if !matches!(
+            self.route,
+            Route::Locked | Route::KeyfileSelect | Route::CreateKeyfile
+        ) {
+            egui::TopBottomPanel::bottom("keyfile_footer").show(ctx, |ui| {
+                ui.add_space(4.0);
+
+                let name = self
+                    .current_selected_keyfile_dir_name()
+                    .unwrap_or_else(|| "(none)".to_string());
+
+                ui.label(format!("keyfile: {name}"));
+                ui.add_space(4.0);
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             self.best_effort_warn.show(ui, debug_ui);
 
@@ -293,25 +312,6 @@ impl eframe::App for UiApp {
                 }
             }
         });
-
-        // ------------------------------------------------------------------
-        // Keyfile footer (reserved bottom area; never clipped by ScrollAreas)
-        // ------------------------------------------------------------------
-        if !matches!(
-            self.route,
-            Route::Locked | Route::KeyfileSelect | Route::CreateKeyfile
-        ) {
-            egui::TopBottomPanel::bottom("keyfile_footer").show(ctx, |ui| {
-                ui.add_space(4.0);
-
-                let name = self
-                    .current_selected_keyfile_dir_name()
-                    .unwrap_or_else(|| "(none)".to_string());
-
-                ui.label(format!("keyfile: {name}"));
-                ui.add_space(4.0);
-            });
-        }
 
         if self.route != Route::Locked {
             self.last_route = self.route;
