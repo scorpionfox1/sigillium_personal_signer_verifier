@@ -190,7 +190,7 @@ pub fn change_passphrase(
 }
 
 // ======================================================
-// helpers
+// internal helpers
 // ======================================================
 
 fn validate_standard_domain_ascii(raw: &str) -> AppResult<String> {
