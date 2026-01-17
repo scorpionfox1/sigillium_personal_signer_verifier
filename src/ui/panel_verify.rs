@@ -109,7 +109,7 @@ impl VerifyPanel {
                 } else {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.pubkey_hex)
-                            .hint_text("Paste 64-char hex public key…"),
+                            .hint_text("Paste hex public key…"),
                     );
                 }
 
