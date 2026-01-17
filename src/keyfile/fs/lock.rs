@@ -186,3 +186,96 @@ fn lock_is_stale(lock_path: &Path) -> bool {
 
     false
 }
+
+// ======================================================
+// Unit Tests
+// ======================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn lock_path_for(keyfile_path: &Path) -> PathBuf {
+        let parent = keyfile_path.parent().unwrap();
+        let fname = keyfile_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("keyfile");
+        parent.join(format!(".sigillium-keyfile.{}.lock", fname))
+    }
+
+    fn write_lock(lock_path: &Path, pid: u32, ts: u64, token: &str) {
+        let s = format!("pid={pid}\nts={ts}\ntoken={token}\n");
+        std::fs::write(lock_path, s).unwrap();
+    }
+
+    #[test]
+    fn acquire_then_drop_removes_lockfile() {
+        let td = tempdir().unwrap();
+        let keyfile_path = td.path().join("keyfile.json");
+        let lock_path = lock_path_for(&keyfile_path);
+
+        {
+            let _guard = acquire_keyfile_lock(&keyfile_path).unwrap();
+            assert!(lock_path.exists());
+        }
+
+        assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn second_acquire_fails_when_lock_is_fresh() {
+        let td = tempdir().unwrap();
+        let keyfile_path = td.path().join("keyfile.json");
+
+        let _guard = acquire_keyfile_lock(&keyfile_path).unwrap();
+        match acquire_keyfile_lock(&keyfile_path) {
+            Ok(_) => panic!("expected KeyfileFsBusy"),
+            Err(AppError::KeyfileFsBusy) => {}
+            Err(e) => panic!("unexpected error: {e:?}"),
+        };
+    }
+
+    #[test]
+    fn stale_lock_is_removed_and_reacquired() {
+        let td = tempdir().unwrap();
+        let keyfile_path = td.path().join("keyfile.json");
+        let lock_path = lock_path_for(&keyfile_path);
+
+        // ts=0 => extremely stale by age check
+        write_lock(&lock_path, 0, 0, "stale-token");
+        assert!(lock_path.exists());
+
+        let _guard = acquire_keyfile_lock(&keyfile_path).unwrap();
+        assert!(lock_path.exists());
+    }
+
+    #[test]
+    fn remove_lock_only_if_token_matches() {
+        let td = tempdir().unwrap();
+        let keyfile_path = td.path().join("keyfile.json");
+        let lock_path = lock_path_for(&keyfile_path);
+
+        write_lock(&lock_path, 123, 0, "abc");
+        assert!(lock_path.exists());
+
+        remove_lock_if_token_matches(&lock_path, "nope").unwrap();
+        assert!(lock_path.exists());
+
+        remove_lock_if_token_matches(&lock_path, "abc").unwrap();
+        assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn remove_lock_refuses_when_no_token_line() {
+        let td = tempdir().unwrap();
+        let lock_path = td.path().join(".sigillium-keyfile.keyfile.json.lock");
+
+        std::fs::write(&lock_path, "pid=1\nts=0\n").unwrap();
+        assert!(lock_path.exists());
+
+        remove_lock_if_token_matches(&lock_path, "anything").unwrap();
+        assert!(lock_path.exists());
+    }
+}

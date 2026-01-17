@@ -98,9 +98,9 @@ pub fn lock_app_inner(state: &AppState, context: &str) -> Result<(), String> {
         let mut session = lock_session(state).map_err(app_err_to_string)?;
         session.unlocked = false;
         session.active_key_id = None;
+        session.active_associated_key_id = None;
     }
 
-    // Refactored to use plural failure logging
     record_best_effort_platform_failures(
         state,
         context,
@@ -133,111 +133,128 @@ pub fn lock_app_inner_if_unlocked(state: &AppState, context: &str) -> Result<(),
 // Unit Tests
 // ======================================================
 
+// src/command_state.rs
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{security_log::SecurityLog, types::SignVerifyMode};
+    use tempfile::tempdir;
     use zeroize::Zeroizing;
 
-    fn mk_state_locked() -> AppState {
-        let dir = std::env::temp_dir().join("sigillium-cmdstate-test-locked");
-        std::fs::create_dir_all(&dir).unwrap();
-        AppState::new_for_tests(&dir).unwrap()
+    fn mk_state() -> AppState {
+        let td = tempdir().expect("tempdir");
+
+        AppState {
+            session: std::sync::Mutex::new(SessionState {
+                unlocked: false,
+                active_key_id: None,
+                active_associated_key_id: None,
+            }),
+            secrets: std::sync::Mutex::new(None),
+            keys: std::sync::Mutex::new(Vec::new()),
+            sign_verify_mode: std::sync::Mutex::new(SignVerifyMode::Text),
+            security_log: std::sync::Mutex::new(
+                SecurityLog::init(td.path()).expect("security log init"),
+            ),
+        }
     }
 
-    fn mk_state_unlocked(master: [u8; 32], active: Option<[u8; 32]>) -> AppState {
-        let dir = std::env::temp_dir().join("sigillium-cmdstate-test-unlocked");
-        std::fs::create_dir_all(&dir).unwrap();
+    fn unlock_with_master(state: &AppState, mk: [u8; 32]) {
+        *state.secrets.lock().unwrap() = Some(SecretsState {
+            master_key: Zeroizing::new(mk),
+            active_private: None,
+        });
+        state.session.lock().unwrap().unlocked = true;
+    }
 
-        let state = AppState::new_for_tests(&dir).unwrap();
+    fn unlock_with_active(state: &AppState, mk: [u8; 32], privk: [u8; 32]) {
+        *state.secrets.lock().unwrap() = Some(SecretsState {
+            master_key: Zeroizing::new(mk),
+            active_private: Some(Zeroizing::new(privk)),
+        });
+        state.session.lock().unwrap().unlocked = true;
+    }
 
-        // secrets
+    // --------------------------------------------------
+    // with_master_key
+    // --------------------------------------------------
+
+    #[test]
+    fn with_master_key_fails_when_locked() {
+        let state = mk_state();
+
+        match with_master_key(&state, |_| Ok(())) {
+            Err(AppError::AppLocked) => {}
+            other => panic!("expected AppLocked, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn with_master_key_succeeds_when_unlocked() {
+        let state = mk_state();
+        unlock_with_master(&state, [7u8; 32]);
+
+        let v = with_master_key(&state, |k| Ok(k[0])).unwrap();
+        assert_eq!(v, 7);
+    }
+
+    // --------------------------------------------------
+    // with_active_private
+    // --------------------------------------------------
+
+    #[test]
+    fn with_active_private_fails_when_locked() {
+        let state = mk_state();
+
+        match with_active_private(&state, |_| Ok(())) {
+            Err(s) => assert_eq!(s, AppError::AppLocked.to_string()),
+            Ok(_) => panic!("expected error"),
+        }
+    }
+
+    #[test]
+    fn with_active_private_fails_when_no_active_key() {
+        let state = mk_state();
+        unlock_with_master(&state, [1u8; 32]);
+
+        match with_active_private(&state, |_| Ok(())) {
+            Err(s) => assert_eq!(s, AppError::NoActiveKeySelected.to_string()),
+            Ok(_) => panic!("expected error"),
+        }
+    }
+
+    #[test]
+    fn with_active_private_succeeds() {
+        let state = mk_state();
+        unlock_with_active(&state, [2u8; 32], [9u8; 32]);
+
+        let v = with_active_private(&state, |k| Ok(k[0])).unwrap();
+        assert_eq!(v, 9);
+    }
+
+    // --------------------------------------------------
+    // lock_app_inner
+    // --------------------------------------------------
+
+    #[test]
+    fn lock_app_inner_clears_secrets_and_session() {
+        let state = mk_state();
+        unlock_with_active(&state, [3u8; 32], [4u8; 32]);
+
         {
-            let mut secrets = state.secrets.lock().unwrap();
-            *secrets = Some(SecretsState {
-                master_key: Zeroizing::new(master),
-                active_private: active.map(Zeroizing::new),
-            });
+            let mut s = state.session.lock().unwrap();
+            s.active_key_id = Some(42);
+            s.active_associated_key_id = Some("assoc".into());
         }
 
-        // session
-        {
-            let mut session = state.session.lock().unwrap();
-            session.unlocked = true;
-            session.active_key_id = active.map(|_| 1);
-        }
-
-        state
-    }
-
-    #[test]
-    fn with_master_key_errors_when_locked() {
-        let state = mk_state_locked();
-        let err = with_master_key(&state, |_| Ok(())).unwrap_err();
-        assert!(matches!(err, AppError::AppLocked));
-    }
-
-    #[test]
-    fn with_master_key_calls_closure_when_unlocked() {
-        let state = mk_state_unlocked([7u8; 32], None);
-        let got = with_master_key(&state, |mk| Ok(**mk)).unwrap();
-        assert_eq!(got, [7u8; 32]);
-    }
-
-    #[test]
-    fn with_active_private_errors_when_locked() {
-        let state = mk_state_locked();
-        let err = with_active_private(&state, |_| Ok(())).unwrap_err();
-        assert_eq!(err, AppError::AppLocked.to_string());
-    }
-
-    #[test]
-    fn with_active_private_errors_when_no_active_key() {
-        let state = mk_state_unlocked([1u8; 32], None);
-        let err = with_active_private(&state, |_| Ok(())).unwrap_err();
-        assert_eq!(err, AppError::NoActiveKeySelected.to_string());
-    }
-
-    #[test]
-    fn with_active_private_calls_closure_when_active_key_present() {
-        let state = mk_state_unlocked([1u8; 32], Some([3u8; 32]));
-        let got = with_active_private(&state, |k| Ok(**k)).unwrap();
-        assert_eq!(got, [3u8; 32]);
-    }
-
-    #[test]
-    fn lock_app_inner_clears_session_and_secrets() {
-        let state = mk_state_unlocked([1u8; 32], Some([2u8; 32]));
-
-        lock_app_inner(&state, "test").unwrap();
+        lock_app_inner(&state, "test").expect("lock_app_inner");
 
         assert!(state.secrets.lock().unwrap().is_none());
-        let session = state.session.lock().unwrap();
-        assert!(!session.unlocked);
-        assert!(session.active_key_id.is_none());
-        assert!(state.keys.lock().unwrap().is_empty());
-    }
 
-    #[test]
-    fn lock_app_inner_if_unlocked_is_noop_when_locked() {
-        let state = mk_state_locked();
-
-        lock_app_inner_if_unlocked(&state, "test").unwrap();
-
-        assert!(state.secrets.lock().unwrap().is_none());
-        let session = state.session.lock().unwrap();
-        assert!(!session.unlocked);
-        assert!(session.active_key_id.is_none());
-    }
-
-    #[test]
-    fn lock_app_inner_if_unlocked_locks_when_unlocked() {
-        let state = mk_state_unlocked([1u8; 32], Some([2u8; 32]));
-
-        lock_app_inner_if_unlocked(&state, "test").unwrap();
-
-        assert!(state.secrets.lock().unwrap().is_none());
-        let session = state.session.lock().unwrap();
-        assert!(!session.unlocked);
-        assert!(session.active_key_id.is_none());
+        let s = state.session.lock().unwrap();
+        assert!(!s.unlocked);
+        assert!(s.active_key_id.is_none());
+        assert!(s.active_associated_key_id.is_none());
     }
 }

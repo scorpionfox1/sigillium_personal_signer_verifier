@@ -6,9 +6,8 @@
 mod ui;
 
 use directories::ProjectDirs;
-use sigillum_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
-use sigillum_personal_signer_verifier_lib::fs_hardening;
-use sigillum_personal_signer_verifier_lib::security_log::record_best_effort_platform_failure;
+use sigillium_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
+use sigillium_personal_signer_verifier_lib::fs_hardening;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -28,21 +27,12 @@ fn main() -> eframe::Result<()> {
 
     std::fs::create_dir_all(&app_data_dir).expect("Could not create app data dir");
 
-    let state = sigillum_personal_signer_verifier_lib::init_state(&app_data_dir)
+    let state = sigillium_personal_signer_verifier_lib::init_state(&app_data_dir)
         .expect("failed to init app state");
     let state = Arc::new(state);
 
-    let ctx = Arc::new(AppCtx::new(app_data_dir.clone()));
-
-    if let Some(dir) = ctx.keyfile_path.parent() {
-        if let Ok(warns) =
-            sigillum_personal_signer_verifier_lib::keyfile::cleanup_delete_tombstones(dir)
-        {
-            for w in warns {
-                record_best_effort_platform_failure(state.as_ref(), "startup_cleanup", w);
-            }
-        }
-    }
+    let ctx = AppCtx::new(app_data_dir.clone());
+    let ctx = Arc::new(ctx);
 
     fs_hardening::startup_hardening_best_effort(state.as_ref(), ctx.as_ref());
 

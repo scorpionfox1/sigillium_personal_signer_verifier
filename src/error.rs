@@ -21,6 +21,7 @@ pub struct UserMsg {
 
 #[derive(Debug)]
 pub enum AppError {
+    KeyfilePassphraseBad,
     // --------------------------------------------------
     // generic / plumbing
     // --------------------------------------------------
@@ -29,9 +30,11 @@ pub enum AppError {
     InternalStateLockFailed,
     StateLockPoisoned,
     InvalidPath,
+    KeyfileDirNameInvalid,
     AppLocked,
     NoActiveKeySelected,
     KeyfileMissingOrCorrupted,
+    KeyfileQuarantined { dir_name: String },
 
     // --------------------------------------------------
     // keyfile fs (IO / durability / locking)
@@ -132,14 +135,20 @@ impl AppError {
         let detail = Some(self.to_string());
 
         let short: &'static str = match self {
+            KeyfilePassphraseBad => "Incorrect keyfile passphrase.",
             // generic
             Io(_) => "File operation failed.",
             Msg(_) => "Operation failed.",
             InternalStateLockFailed | StateLockPoisoned => "Internal state lock failed.",
             InvalidPath => "Invalid path.",
+            KeyfileDirNameInvalid => "Invalid keyfile name.",
             AppLocked => "App is locked.",
             NoActiveKeySelected => "No active key selected.",
             KeyfileMissingOrCorrupted => "Keyfile missing or corrupted.",
+            KeyfileQuarantined { .. } => {
+                kind = UserMsgKind::Warn;
+                "Keyfile was corrupted and quarantined."
+            }
 
             // keyfile fs
             KeyfileFsReadFailed(_) => "Failed to read keyfile.",
@@ -232,14 +241,19 @@ impl fmt::Display for AppError {
         use AppError::*;
 
         match self {
+            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
             Io(e) => write!(f, "io error: {e}"),
             Msg(s) => write!(f, "{s}"),
             InternalStateLockFailed => write!(f, "internal state lock failed"),
             StateLockPoisoned => write!(f, "state lock poisoned"),
             InvalidPath => write!(f, "invalid path"),
+            KeyfileDirNameInvalid => write!(f, "Bad keyfile name."), // ui calls it "keyfile name," but in fact it is a dir
             AppLocked => write!(f, "app is locked"),
             NoActiveKeySelected => write!(f, "no active key selected"),
             KeyfileMissingOrCorrupted => write!(f, "keyfile missing or corrupted"),
+            KeyfileQuarantined { dir_name } => {
+                write!(f, "keyfile corrupted and quarantined: {dir_name}")
+            }
 
             KeyfileFsReadFailed(s) => write!(f, "keyfile read failed: {s}"),
             KeyfileFsInvalidJson(s) => write!(f, "keyfile invalid json: {s}"),

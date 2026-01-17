@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command,
     context::AppCtx,
     types::{AppState, KeyId},

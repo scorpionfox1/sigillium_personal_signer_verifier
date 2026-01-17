@@ -1,10 +1,11 @@
 // src/ui/panel_sign.rs
 
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
+    error::AppError,
     types::{AppState, SignVerifyMode},
 };
 
@@ -50,6 +51,10 @@ impl SignPanel {
                 if let Err(e) =
                     widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
                 {
+                    if let AppError::KeyfileQuarantined { .. } = e {
+                        *route = Route::KeyfileSelect;
+                        return;
+                    }
                     self.msg.from_app_error(&e, ctx.debug_ui);
                 }
                 ui.add_space(10.0);
@@ -146,6 +151,11 @@ impl SignPanel {
                                 self.msg.set_success("Signed.");
                             }
                             Err(e) => {
+                                if let AppError::KeyfileQuarantined { .. } = e {
+                                    *route = Route::KeyfileSelect;
+                                    self.signature_b64.clear();
+                                    return;
+                                }
                                 self.msg.from_app_error(&e, ctx.debug_ui);
                                 self.signature_b64.clear();
                             }

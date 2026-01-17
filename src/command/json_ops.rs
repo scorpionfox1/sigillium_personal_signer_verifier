@@ -113,10 +113,20 @@ mod tests {
     }
 
     #[test]
+    fn validate_json_2020_12_rejects_invalid_instance_with_schema_validation_error() {
+        // missing required "age"
+        let json_bad = r#"{"name":"Alice","active":true}"#;
+
+        match validate_json_2020_12(json_bad, SCHEMA_2020_12) {
+            Err(AppError::SchemaValidation(_)) => {}
+            other => panic!("expected SchemaValidation(_), got: {:?}", other),
+        }
+    }
+
+    #[test]
     fn validate_json_2020_12_rejects_wrong_draft_when_schema_declares_other() {
         let json_ok = r#"{"name":"Alice","age":30,"active":true}"#;
 
-        // Same schema, but claims a different draft in $schema.
         let schema_wrong = r#"{
           "$schema": "https://json-schema.org/draft/2019-09/schema",
           "type": "object",
@@ -129,11 +139,45 @@ mod tests {
           }
         }"#;
 
-        let err = validate_json_2020_12(json_ok, schema_wrong).unwrap_err();
-        assert!(
-            matches!(err, AppError::SchemaWrongDraft),
-            "expected SchemaWrongDraft, got: {err:?}"
-        );
+        match validate_json_2020_12(json_ok, schema_wrong) {
+            Err(AppError::SchemaWrongDraft) => {}
+            other => panic!("expected SchemaWrongDraft, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn validate_json_2020_12_rejects_invalid_json() {
+        let json_bad = r#"{"name":"Alice""#; // broken JSON
+        match validate_json_2020_12(json_bad, SCHEMA_2020_12) {
+            Err(AppError::InvalidJson(_)) => {}
+            other => panic!("expected InvalidJson(_), got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn validate_json_2020_12_rejects_invalid_schema_json() {
+        let json_ok = r#"{"name":"Alice","age":30,"active":true}"#;
+        let schema_bad = r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","#; // broken JSON
+        match validate_json_2020_12(json_ok, schema_bad) {
+            Err(AppError::InvalidSchemaJson(_)) => {}
+            other => panic!("expected InvalidSchemaJson(_), got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn validate_json_2020_12_enforces_json_and_schema_size_limits() {
+        let too_big_json = "x".repeat(MAX_JSON_BYTES + 1);
+        match validate_json_2020_12(&too_big_json, SCHEMA_2020_12) {
+            Err(AppError::JsonTooLarge) => {}
+            other => panic!("expected JsonTooLarge, got: {:?}", other),
+        }
+
+        let json_ok = r#"{"name":"Alice","age":30,"active":true}"#;
+        let too_big_schema = "x".repeat(MAX_SCHEMA_BYTES + 1);
+        match validate_json_2020_12(json_ok, &too_big_schema) {
+            Err(AppError::SchemaTooLarge) => {}
+            other => panic!("expected SchemaTooLarge, got: {:?}", other),
+        }
     }
 
     #[test]
@@ -144,18 +188,17 @@ mod tests {
         let ha = canonicalize_json_2020_12(json_a, SCHEMA_2020_12).expect("canonicalize a");
         let hb = canonicalize_json_2020_12(json_b, SCHEMA_2020_12).expect("canonicalize b");
 
-        assert_eq!(ha, hb, "canonical hash should be invariant to key order");
+        assert_eq!(ha, hb);
     }
 
     #[test]
-    fn validate_json_2020_12_returns_schema_validation_error_on_invalid_instance() {
-        // missing required "age"
-        let json_bad = r#"{"name":"Alice","active":true}"#;
+    fn canonicalize_json_matches_2020_12_when_schema_accepts() {
+        let json = r#"{"name":"Alice","age":30,"active":true}"#;
 
-        let err = validate_json_2020_12(json_bad, SCHEMA_2020_12).unwrap_err();
-        assert!(
-            matches!(err, AppError::SchemaValidation(_)),
-            "expected SchemaValidation(_), got: {err:?}"
-        );
+        let h1 = canonicalize_json(json).expect("canonicalize_json");
+        let h2 =
+            canonicalize_json_2020_12(json, SCHEMA_2020_12).expect("canonicalize_json_2020_12");
+
+        assert_eq!(h1, h2);
     }
 }

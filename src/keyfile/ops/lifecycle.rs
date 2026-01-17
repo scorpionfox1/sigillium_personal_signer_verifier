@@ -51,67 +51,6 @@ pub fn read_master_key(path: &Path, passphrase: &str) -> AppResult<[u8; 32]> {
     derive_encryption_key(passphrase, &salt_arr)
 }
 
-// Best-effort self-destruct of a tombstoned keyfile.
-//
-// This owns the *mechanics* (fsync + secure delete),
-// while the command layer owns logging and policy.
-pub fn self_destruct_best_effort(
-    tombstone: &Path,
-    parent_dir: &Path,
-) -> (Result<(), String>, Vec<crate::platform::BestEffortFailure>) {
-    let mut warns = Vec::new();
-
-    if let Some(w) = crate::platform::fsync_dir_best_effort(parent_dir) {
-        warns.push(w);
-    }
-
-    let (res, mut w) = crate::platform::secure_delete_best_effort(tombstone);
-    warns.append(&mut w);
-
-    (res, warns)
-}
-
-pub fn cleanup_delete_tombstones(dir: &Path) -> AppResult<Vec<crate::platform::BestEffortFailure>> {
-    use std::fs;
-
-    let mut warns: Vec<crate::platform::BestEffortFailure> = Vec::new();
-
-    if !dir.exists() {
-        return Ok(warns);
-    }
-
-    let rd = fs::read_dir(dir).map_err(|e| AppError::KeyfileFsReadFailed(e.to_string()))?;
-
-    for ent in rd {
-        let ent = ent.map_err(|e| AppError::KeyfileFsReadFailed(e.to_string()))?;
-        let path = ent.path();
-
-        if !path.is_file() {
-            continue;
-        }
-
-        let name = ent.file_name();
-        let name = name.to_string_lossy();
-
-        if !name.starts_with(".delete-") && !name.starts_with(".keyfile.deleted.") {
-            continue;
-        }
-
-        let (res, w) = crate::platform::secure_delete_best_effort(&path);
-        warns.extend(w);
-
-        if res.is_err() {
-            warns.push(crate::platform::BestEffortFailure {
-                kind: "cleanup_secure_delete_failed",
-                errno: None,
-                msg: "cleanup secure_delete_best_effort failed; will retry later",
-            });
-        }
-    }
-
-    Ok(warns)
-}
-
 // ======================================================
 // Unit Tests
 // ======================================================
@@ -120,6 +59,7 @@ pub fn cleanup_delete_tombstones(dir: &Path) -> AppResult<Vec<crate::platform::B
 mod tests {
     use super::*;
     use crate::context::APP_ID;
+    use crate::keyfile::KEYFILE_FILENAME;
     use crate::keyfile::{fs, types::KeyfileData, types::KEYFILE_FORMAT, types::KEYFILE_VERSION};
     use base64::engine::general_purpose;
 
@@ -133,7 +73,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         write_blank_keyfile(&path).unwrap();
 
@@ -162,7 +102,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("keyfile.json");
+        let path = dir.join(KEYFILE_FILENAME);
 
         // 15 bytes instead of 16
         let bad_salt = [0u8; 15];
@@ -180,36 +120,6 @@ mod tests {
 
         let err = read_master_key(&path, "passphrase").unwrap_err();
         assert!(matches!(err, AppError::InvalidSaltLength { .. }));
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn cleanup_delete_tombstones_does_not_touch_normal_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "sigillium-test-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let normal = dir.join("normal.txt");
-        let tomb1 = dir.join(".delete-abc");
-        let tomb2 = dir.join(".keyfile.deleted.xyz");
-
-        std::fs::write(&normal, b"ok").unwrap();
-        std::fs::write(&tomb1, b"tomb").unwrap();
-        std::fs::write(&tomb2, b"tomb").unwrap();
-
-        let _warns = cleanup_delete_tombstones(&dir).unwrap();
-
-        // Normal file must remain.
-        assert!(normal.exists());
-
-        // Tombstones may or may not be removed depending on platform best-effort behavior.
-        // We don't assert on their existence here.
 
         let _ = std::fs::remove_dir_all(&dir);
     }

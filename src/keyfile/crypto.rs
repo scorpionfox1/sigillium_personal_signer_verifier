@@ -209,3 +209,143 @@ fn cipher_from_master_key(master_key: &Zeroizing<[u8; 32]>) -> ChaCha20Poly1305 
     let key = Key::from_slice(master_key.as_ref());
     ChaCha20Poly1305::new(key)
 }
+
+// ======================================================
+// Unit Tests
+// ======================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::AppError;
+    use crate::keyfile::types::{KEYFILE_FORMAT, KEYFILE_VERSION};
+    use crate::types::KeyId;
+    use base64::engine::general_purpose;
+    use zeroize::Zeroizing;
+
+    fn mk_data() -> KeyfileData {
+        KeyfileData {
+            version: KEYFILE_VERSION,
+            format: KEYFILE_FORMAT.to_string(),
+            app: "sigillium".to_string(),
+            salt: "".to_string(),
+            file_mac_b64: None,
+            keys: vec![],
+        }
+    }
+
+    fn mk_aad() -> AadBytes {
+        let data = mk_data();
+        let id: KeyId = 1;
+        aad_for_private_key(&data, id, "example.com", "deadbeef")
+    }
+
+    #[test]
+    fn derive_encryption_key_rejects_empty_salt() {
+        let err = derive_encryption_key("pw", &[]).unwrap_err();
+        assert!(matches!(err, AppError::CryptoKdfFailed(_)));
+    }
+
+    #[test]
+    fn derive_encryption_key_is_deterministic_with_fixed_salt() {
+        let salt = [0x42u8; 16];
+        let k1 = derive_encryption_key("pw", &salt).unwrap();
+        let k2 = derive_encryption_key("pw", &salt).unwrap();
+        assert_eq!(k1, k2);
+    }
+
+    #[test]
+    fn derive_encryption_key_rejects_short_salt() {
+        let err = derive_encryption_key("pw", &[0u8; 15]).unwrap_err();
+        assert!(matches!(err, AppError::InvalidSaltLength { len: 15 }));
+    }
+
+    #[test]
+    fn derive_encryption_key_accepts_16_byte_salt_and_is_deterministic() {
+        let salt = [9u8; 16];
+        let k1 = derive_encryption_key("pw", &salt).unwrap();
+        let k2 = derive_encryption_key("pw", &salt).unwrap();
+        assert_eq!(k1, k2);
+    }
+
+    #[test]
+    fn decode_nonce12_b64_rejects_bad_base64() {
+        let err = decode_nonce12_b64("not base64!!!").unwrap_err();
+        assert!(matches!(err, AppError::InvalidNonceBase64(_)));
+    }
+
+    #[test]
+    fn decode_nonce12_b64_rejects_wrong_length() {
+        let s = general_purpose::STANDARD.encode([0u8; 11]);
+        let err = decode_nonce12_b64(&s).unwrap_err();
+        assert!(matches!(
+            err,
+            AppError::InvalidNonceLength {
+                expected: 12,
+                got: 11
+            }
+        ));
+    }
+
+    #[test]
+    fn encrypt_decrypt_bytes_roundtrip_with_aad() {
+        let master_key = Zeroizing::new([7u8; 32]);
+        let aad = mk_aad();
+        let pt = Zeroizing::new(b"hello".to_vec());
+
+        let (nonce, ct) = encrypt_bytes_with_aad(&master_key, &aad, &pt).unwrap();
+        let out = decrypt_bytes_with_aad(&master_key, &aad, &nonce, &ct).unwrap();
+
+        assert_eq!(out.as_slice(), b"hello");
+    }
+
+    #[test]
+    fn encrypt_rejects_empty_aad() {
+        let master_key = Zeroizing::new([7u8; 32]);
+        let aad = AadBytes::new(vec![]);
+        let pt = Zeroizing::new(b"hello".to_vec());
+
+        let err = encrypt_bytes_with_aad(&master_key, &aad, &pt).unwrap_err();
+        assert!(matches!(err, AppError::InvalidAad(_)));
+    }
+
+    #[test]
+    fn decrypt_rejects_wrong_nonce_length() {
+        let master_key = Zeroizing::new([7u8; 32]);
+        let aad = mk_aad();
+
+        let err = decrypt_bytes_with_aad(&master_key, &aad, &[0u8; 11], b"ct").unwrap_err();
+        assert!(matches!(
+            err,
+            AppError::InvalidNonceLength {
+                expected: 12,
+                got: 11
+            }
+        ));
+    }
+
+    #[test]
+    fn decrypt_fails_with_wrong_aad() {
+        let master_key = Zeroizing::new([7u8; 32]);
+        let aad1 = mk_aad();
+        let aad2 = AadBytes::new(b"other-aad".to_vec());
+        let pt = Zeroizing::new(b"hello".to_vec());
+
+        let (nonce, ct) = encrypt_bytes_with_aad(&master_key, &aad1, &pt).unwrap();
+        let err = decrypt_bytes_with_aad(&master_key, &aad2, &nonce, &ct).unwrap_err();
+
+        assert!(matches!(err, AppError::CryptoDecryptFailed(_)));
+    }
+
+    #[test]
+    fn encrypt_decrypt_string_roundtrip() {
+        let master_key = Zeroizing::new([7u8; 32]);
+        let aad = mk_aad();
+        let s = Zeroizing::new("hi".to_string());
+
+        let (nonce_b64, ct_b64) = encrypt_string_with_aad(&master_key, &aad, &s).unwrap();
+        let out = decrypt_string_with_aad(&master_key, &aad, &nonce_b64, &ct_b64).unwrap();
+
+        assert_eq!(out.as_str(), "hi");
+    }
+}

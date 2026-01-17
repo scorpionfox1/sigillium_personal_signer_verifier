@@ -1,8 +1,7 @@
 // src/ui/panel_security.rs
 
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::types::KeyfileState;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
 
@@ -92,7 +91,7 @@ impl SecurityPanel {
                     SecurityTab::ChangePassphrase => {
                         self.ui_change_passphrase(ui, state, ctx, route)
                     }
-                    SecurityTab::SelfDestruct => self.ui_self_destruct(ui, state, ctx, route),
+                    SecurityTab::SelfDestruct => self.ui_self_destruct(ui, ctx, route),
                 }
             });
     }
@@ -122,7 +121,7 @@ impl SecurityPanel {
         ui: &mut egui::Ui,
         state: &AppState,
         ctx: &AppCtx,
-        route: &mut Route,
+        _route: &mut Route,
     ) {
         ui.label("Change passphrase");
         ui.add_space(6.0);
@@ -175,20 +174,12 @@ impl SecurityPanel {
             {
                 self.clear_messages();
 
-                let (ks, res) = command::change_passphrase(
+                let res = command::change_passphrase(
                     self.old_pass.trim(),
                     self.new_pass.trim(),
                     state,
                     ctx,
                 );
-
-                if let Ok(mut g) = state.keyfile_state.lock() {
-                    *g = ks;
-                }
-
-                if ks != KeyfileState::NotCorrupted {
-                    *route = Route::CreateKeyfile;
-                }
 
                 match res {
                     Ok(()) => {
@@ -203,13 +194,7 @@ impl SecurityPanel {
         self.msg.show(ui, false);
     }
 
-    fn ui_self_destruct(
-        &mut self,
-        ui: &mut egui::Ui,
-        state: &AppState,
-        ctx: &AppCtx,
-        route: &mut Route,
-    ) {
+    fn ui_self_destruct(&mut self, ui: &mut egui::Ui, ctx: &AppCtx, route: &mut Route) {
         ui.label("Self-destruct");
         ui.add_space(6.0);
 
@@ -218,7 +203,13 @@ impl SecurityPanel {
         ui.add_space(8.0);
 
         ui.label("Keyfile path (for sanity check)");
-        let mut path = ctx.keyfile_path.display().to_string();
+
+        let path_buf_opt = ctx.current_keyfile_path();
+        let mut path = match &path_buf_opt {
+            Some(p) => p.display().to_string(),
+            None => "<no keyfile selected>".to_string(),
+        };
+
         ui.add(egui::TextEdit::singleline(&mut path).interactive(false));
 
         ui.add_space(10.0);
@@ -257,10 +248,22 @@ impl SecurityPanel {
                             self.confirm_self_destruct = false;
                             self.clear_messages();
 
-                            match command::self_destruct_keyfile(state, ctx) {
-                                Ok(_) => self.msg.set_success("Keyfile destroyed."),
-                                Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
-                            }
+                            let Some(keyfile_path) = ctx.current_keyfile_path() else {
+                                self.msg.set_warn("No keyfile selected.");
+                                return;
+                            };
+
+                            let Some(dir) = keyfile_path.parent() else {
+                                self.msg.set_error("Invalid keyfile path.");
+                                return;
+                            };
+
+                            sigillium_personal_signer_verifier_lib::keyfile_store::destroy_keyfile_dir_best_effort(dir);
+
+                            ctx.set_selected_keyfile_dir(None);
+                            self.msg.set_success("Keyfile destroyed.");
+
+                            *route = Route::KeyfileSelect;
 
                             self.confirm_phrase.clear();
                             self.old_pass.clear();
@@ -268,7 +271,6 @@ impl SecurityPanel {
                             self.new_pass_confirm.clear();
                             self.show_passphrases = false;
 
-                            *route = Route::CreateKeyfile;
                         }
                     });
                 });

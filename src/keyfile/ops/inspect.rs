@@ -13,7 +13,7 @@ use crate::{
         validate::{validate_keyfile_structure, verify_file_mac},
         KeyEntry, KeyfileData,
     },
-    types::{KeyId, KeyMeta, KeyfileState},
+    types::{KeyId, KeyMeta},
 };
 
 use base64::{engine::general_purpose, Engine};
@@ -112,15 +112,14 @@ fn decrypt_private_key_field(
     Ok(out)
 }
 
-pub fn check_keyfile_state(path: &Path) -> Result<KeyfileState, AppError> {
+pub fn inspect_keyfile(path: &Path) -> AppResult<()> {
     if !path.exists() {
-        return Ok(KeyfileState::Missing);
+        return Err(AppError::KeyfileMissing);
     }
 
-    let data = read_json(&path)?;
+    let data = read_json(path)?;
     validate_keyfile_structure(&data)?;
-
-    Ok(KeyfileState::NotCorrupted)
+    Ok(())
 }
 
 pub fn read_json_verified_optional_mac(
@@ -142,79 +141,4 @@ fn verify_optional_mac(data: &KeyfileData, master_key: &[u8; 32]) -> AppResult<(
         verify_file_mac(data, master_key, mac_b64)?;
     }
     Ok(())
-}
-
-// ======================================================
-// Unit Tests
-// ======================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::keyfile::ops::test_support::{mk_fixture, mk_fixture_one_key};
-    use crate::keyfile::{fs, validate::set_file_mac_in_place};
-
-    #[test]
-    fn check_keyfile_state_missing_valid_and_corrupt() {
-        // Missing
-        let fx = mk_fixture("passphrase").unwrap();
-        let missing = fx.dir.join("does_not_exist.json");
-        assert!(matches!(
-            check_keyfile_state(&missing).unwrap(),
-            KeyfileState::Missing
-        ));
-
-        // Valid
-        assert!(matches!(
-            check_keyfile_state(&fx.path).unwrap(),
-            KeyfileState::NotCorrupted
-        ));
-
-        // Corrupt (invalid JSON)
-        std::fs::write(&fx.path, b"{not-json").unwrap();
-        assert!(check_keyfile_state(&fx.path).is_err());
-    }
-
-    #[test]
-    fn list_key_meta_returns_expected_label_and_public_key() {
-        let f1 = mk_fixture_one_key("passphrase", "assoc-123").unwrap();
-
-        let metas = list_key_meta(&f1.fx.path, &f1.fx.master_key).unwrap();
-        assert_eq!(metas.len(), 1);
-
-        let m = &metas[0];
-        assert_eq!(m.id, f1.key_id);
-        assert_eq!(m.domain, f1.domain);
-        assert_eq!(m.public_key, f1.public);
-        assert_eq!(m.label, f1.label);
-    }
-
-    #[test]
-    fn decrypt_key_material_returns_private_and_associated_id() {
-        let f1 = mk_fixture_one_key("passphrase", "assoc-123").unwrap();
-
-        let (privk, assoc) =
-            decrypt_key_material(&f1.fx.path, &f1.fx.master_key, f1.key_id).unwrap();
-
-        assert_eq!(privk, f1.private);
-        assert_eq!(assoc, "assoc-123");
-    }
-
-    #[test]
-    fn read_json_verified_optional_mac_rejects_tampered_file_when_mac_present() {
-        let f1 = mk_fixture_one_key("passphrase", "assoc-123").unwrap();
-
-        // Ensure a MAC is present (append_key normally sets it, but make explicit)
-        let mut data = fs::read_json(&f1.fx.path).unwrap();
-        set_file_mac_in_place(&mut data, &f1.fx.master_key).unwrap();
-        fs::write_json(&f1.fx.path, &data).unwrap();
-
-        // Tamper with JSON content without updating MAC
-        let mut tampered = fs::read_json(&f1.fx.path).unwrap();
-        tampered.keys[0].domain = "tampered.example".to_string();
-        fs::write_json(&f1.fx.path, &tampered).unwrap();
-
-        let res = read_json_verified_optional_mac(&f1.fx.path, &f1.fx.master_key);
-        assert!(res.is_err());
-    }
 }

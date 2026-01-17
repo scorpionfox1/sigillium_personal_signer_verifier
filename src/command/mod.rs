@@ -4,7 +4,6 @@ use crate::context::AppCtx;
 use crate::{keyfile, types::AppState};
 
 pub mod json_ops;
-pub mod keyfile_inspect;
 pub mod keyfile_lifecycle;
 pub mod keyfile_mutation;
 pub mod session;
@@ -14,7 +13,7 @@ pub mod sign_verify;
 
 use crate::error::{AppError, AppResult};
 pub use json_ops::validate_json_2020_12;
-pub use keyfile_lifecycle::{create_keyfile, self_destruct_keyfile};
+pub use keyfile_lifecycle::create_keyfile;
 pub use keyfile_mutation::{change_passphrase, install_key, uninstall_active_key};
 pub use session::{clear_active_key, get_status, select_active_key, unlock_app};
 pub use sign_verify::{sign_payload, verify_payload};
@@ -30,8 +29,12 @@ pub(super) fn validate_passphrase(pass: &str) -> Result<(), String> {
 }
 
 pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
+    let keyfile_path = ctx
+        .current_keyfile_path()
+        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+
     let metas = crate::command_state::with_master_key(state, |k| {
-        keyfile::list_key_meta(&ctx.keyfile_path, &*k)
+        keyfile::list_key_meta(&keyfile_path, &*k)
     })?;
 
     let mut keys = state

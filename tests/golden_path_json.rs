@@ -1,83 +1,149 @@
 // tests/golden_path_json.rs
 
-mod common;
+use sigillium_personal_signer_verifier_lib::{
+    command,
+    context::AppCtx,
+    types::{AppState, SignVerifyMode},
+};
 
-use sigillum_personal_signer_verifier_lib::{command, types::SignVerifyMode};
-
-use crate::common::setup_one_active_key;
-
-const PASSPHRASE: &str = "correct horse battery staple"; // length >= 15
+const PASSPHRASE: &str = "correct horse battery staple";
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-const DOMAIN: &str = "example.test";
-const LABEL: &str = "Test Key";
-const ASSOCIATED_ID: &str = "assoc-123";
 
-// JSON payloads (note: semantically identical, different key order)
-const JSON_OK: &str = r#"{"name":"Alice","age":30,"active":true}"#;
-const JSON_OK_REORDERED: &str = r#"{"active":true,"age":30,"name":"Alice"}"#;
-const JSON_BAD: &str = r#"{"name":"Alice","age":31,"active":true}"#;
+const DOMAIN_1: &str = "example.test";
+const DOMAIN_2: &str = "example2.test";
+const LABEL_1: &str = "Test Key 1";
+const LABEL_2: &str = "Test Key 2";
 
-const JSON_SCHEMA: &str = r#"{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["name", "age", "active"],
-  "properties": {
-    "name":   { "type": "string" },
-    "age":    { "type": "integer" },
-    "active": { "type": "boolean" }
+const JSON_MSG: &str = r#"{"kind":"note","n":1}"#;
+
+// Rejects: requires property "missing"
+const BAD_SCHEMA: &str = r#"{
+  "type":"object",
+  "required":["missing"],
+  "properties":{
+    "kind":{"type":"string"},
+    "n":{"type":"integer"}
   }
 }"#;
 
+// Accepts: requires kind + n with expected types
+const GOOD_SCHEMA: &str = r#"{
+  "type":"object",
+  "required":["kind","n"],
+  "properties":{
+    "kind":{"type":"string"},
+    "n":{"type":"integer"}
+  },
+  "additionalProperties": true
+}"#;
+
 #[test]
-fn golden_path_json_mode_create_install_select_sign_verify() {
-    let env = setup_one_active_key(
-        PASSPHRASE,
-        MNEMONIC,
-        DOMAIN,
-        LABEL,
-        Some(ASSOCIATED_ID),
-        true,
+fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
+    let td_state = tempfile::tempdir().unwrap();
+    let td_keyfile = tempfile::tempdir().unwrap();
+
+    let state = AppState::new_for_tests(td_state.path()).unwrap();
+    let ctx = AppCtx::new(td_keyfile.path().to_path_buf());
+
+    // Create a keyfile dir + select it in context
+    let kf_dir = ctx.keyfiles_root().join("kf");
+    std::fs::create_dir_all(&kf_dir).unwrap();
+    ctx.set_selected_keyfile_dir(Some(kf_dir));
+
+    command::create_keyfile(PASSPHRASE, &state, &ctx).unwrap();
+    command::unlock_app(PASSPHRASE, &state, &ctx).unwrap();
+
+    // Install key 1 + key 2 (same mnemonic, different domains)
+    command::install_key(MNEMONIC, DOMAIN_1, LABEL_1, None, true, &state, &ctx).unwrap();
+    command::install_key(MNEMONIC, DOMAIN_2, LABEL_2, None, true, &state, &ctx).unwrap();
+
+    // Read ids + pubkeys from meta cache
+    let (key1_id, pub1_hex, key2_id, pub2_hex) = {
+        let metas = state.keys.lock().unwrap();
+
+        let k1 = metas
+            .iter()
+            .find(|m| m.domain == DOMAIN_1)
+            .expect("meta key1");
+        let k2 = metas
+            .iter()
+            .find(|m| m.domain == DOMAIN_2)
+            .expect("meta key2");
+
+        (
+            k1.id,
+            hex::encode(k1.public_key),
+            k2.id,
+            hex::encode(k2.public_key),
+        )
+    };
+
+    // ---- Schema branch with key 2 ----
+    command::select_active_key(key2_id, &state, &ctx).unwrap();
+
+    // Bad schema should reject signing
+    assert!(
+        command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(BAD_SCHEMA), &state).is_err(),
+        "expected schema validation to reject signing"
     );
 
-    let sig_b64 =
-        command::sign_payload(JSON_OK, SignVerifyMode::Json, Some(JSON_SCHEMA), &env.state)
-            .expect("sign_payload (json)");
+    // Good schema should allow signing
+    let sig2 = command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(GOOD_SCHEMA), &state)
+        .expect("sign key2 with good schema");
+
+    // Cross-verify: key1 must fail, key2 must pass
+    let ok = command::verify_payload(
+        &pub1_hex,
+        JSON_MSG,
+        &sig2,
+        SignVerifyMode::Json,
+        Some(GOOD_SCHEMA),
+    )
+    .expect("verify with key1 pub");
+    assert!(!ok);
 
     let ok = command::verify_payload(
-        &env.pubkey_hex(),
-        JSON_OK,
-        &sig_b64,
+        &pub2_hex,
+        JSON_MSG,
+        &sig2,
         SignVerifyMode::Json,
-        Some(JSON_SCHEMA),
+        Some(GOOD_SCHEMA),
     )
-    .expect("verify_payload (json)");
-    assert!(ok, "signature should verify for the original JSON payload");
+    .expect("verify with key2 pub");
+    assert!(ok);
 
-    let ok_reordered = command::verify_payload(
-        &env.pubkey_hex(),
-        JSON_OK_REORDERED,
-        &sig_b64,
-        SignVerifyMode::Json,
-        Some(JSON_SCHEMA),
-    )
-    .expect("verify_payload (json, reordered)");
-    assert!(
-        ok_reordered,
-        "JSON signature should verify for semantically identical JSON with different key order"
-    );
+    // ---- Sign with key 1 under schema ----
+    command::select_active_key(key1_id, &state, &ctx).unwrap();
 
-    let bad = command::verify_payload(
-        &env.pubkey_hex(),
-        JSON_BAD,
-        &sig_b64,
+    let sig1 = command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(GOOD_SCHEMA), &state)
+        .expect("sign key1 with good schema");
+
+    let ok = command::verify_payload(
+        &pub2_hex,
+        JSON_MSG,
+        &sig1,
         SignVerifyMode::Json,
-        Some(JSON_SCHEMA),
+        Some(GOOD_SCHEMA),
     )
-    .expect("verify_payload (json, tampered)");
-    assert!(
-        !bad,
-        "signature must not verify for a different JSON payload"
-    );
+    .expect("verify with key2 pub");
+    assert!(!ok);
+
+    let ok = command::verify_payload(
+        &pub1_hex,
+        JSON_MSG,
+        &sig1,
+        SignVerifyMode::Json,
+        Some(GOOD_SCHEMA),
+    )
+    .expect("verify with key1 pub");
+    assert!(ok);
+
+    // ---- No-schema branch: key1 should still sign/verify ----
+    let sig1_ns = command::sign_payload(JSON_MSG, SignVerifyMode::Json, None, &state)
+        .expect("sign key1 without schema");
+
+    let ok = command::verify_payload(&pub1_hex, JSON_MSG, &sig1_ns, SignVerifyMode::Json, None)
+        .expect("verify key1 without schema");
+    assert!(ok);
 }

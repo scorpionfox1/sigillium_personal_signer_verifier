@@ -12,7 +12,9 @@ use crate::types::AppState;
 pub fn startup_hardening_best_effort(state: &AppState, ctx: &AppCtx) {
     record_best_effort_platform_failures(state, "startup", platform::harden_process_best_effort());
 
-    enforce_keyfile_perms_best_effort(state, &ctx.keyfile_path, &ctx.app_data_dir, "startup");
+    if let Some(keyfile_path) = ctx.current_keyfile_path() {
+        enforce_keyfile_perms_best_effort(state, &keyfile_path, &ctx.app_data_dir, "startup");
+    }
 }
 
 pub fn enforce_keyfile_perms_best_effort(

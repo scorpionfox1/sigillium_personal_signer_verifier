@@ -14,13 +14,6 @@ pub enum SignVerifyMode {
     Json,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KeyfileState {
-    Missing,
-    NotCorrupted,
-    Corrupted,
-}
-
 pub struct SessionState {
     pub unlocked: bool,
     pub active_key_id: Option<KeyId>,
@@ -62,9 +55,6 @@ pub struct AppState {
     pub secrets: Mutex<Option<SecretsState>>,
     pub keys: std::sync::Mutex<Vec<KeyMeta>>,
     pub sign_verify_mode: std::sync::Mutex<SignVerifyMode>,
-
-    // keyfile presence / integrity state (startup populates this)
-    pub keyfile_state: std::sync::Mutex<KeyfileState>,
 
     // persistent + in-memory security event log
     pub security_log: std::sync::Mutex<SecurityLog>,

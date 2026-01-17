@@ -1,6 +1,6 @@
 // src/ui/message.rs
 
-use sigillum_personal_signer_verifier_lib::error::{AppError, UserMsgKind};
+use sigillium_personal_signer_verifier_lib::error::{AppError, UserMsgKind};
 
 use super::egui;
 use super::egui::{Color32, Ui};

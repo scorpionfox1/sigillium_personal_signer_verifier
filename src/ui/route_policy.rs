@@ -1,13 +1,12 @@
 // src/ui/route_policy.rs
 
 use crate::ui::Route;
-use sigillum_personal_signer_verifier_lib::types::KeyfileState;
 
 /// Minimal routing context derived by ui/mod.rs
 #[derive(Clone, Copy, Debug)]
 pub struct RouteCtx {
+    pub keyfile_selected: bool,
     pub unlocked: bool,
-    pub keyfile_state: KeyfileState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,14 +16,17 @@ pub enum MessageClearPolicy {
 }
 
 /// Centralized route invariants (pure)
-pub fn apply_route_guards(requested: Route, ctx: RouteCtx) -> Route {
-    // If keyfile missing or corrupted, force CreateKeyfile
-    match ctx.keyfile_state {
-        KeyfileState::Missing | KeyfileState::Corrupted => return Route::CreateKeyfile,
-        KeyfileState::NotCorrupted => {}
+pub fn apply_route_guards(ctx: &RouteCtx, requested: Route) -> Route {
+    // If no keyfile is selected, always go to KeyfileSelect
+    // (but allow CreateKeyfile via explicit button).
+    if !ctx.keyfile_selected {
+        if requested == Route::CreateKeyfile {
+            return Route::CreateKeyfile;
+        }
+        return Route::KeyfileSelect;
     }
 
-    // If locked, force Locked (except CreateKeyfile handled above)
+    // If locked, force Locked (except CreateKeyfile/KeyfileSelect handled above)
     if !ctx.unlocked && requested != Route::Locked {
         return Route::Locked;
     }
@@ -34,7 +36,6 @@ pub fn apply_route_guards(requested: Route, ctx: RouteCtx) -> Route {
 
 /// Message clearing policy (pure)
 pub fn message_clear_policy(prev: Route, next: Route) -> MessageClearPolicy {
-    // Preserve messages when moving to/from Locked; otherwise clear non-lock panels
     if prev != Route::Locked && next != Route::Locked {
         MessageClearPolicy::ClearAllNonLockPanels
     } else {

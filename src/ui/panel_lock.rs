@@ -1,10 +1,13 @@
 // src/ui/panel_lock.rs
 
-use super::Route;
-use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{command, context::AppCtx, types::AppState};
-
 use super::message::PanelMsgState;
+use super::Route;
+
+use eframe::egui;
+
+use sigillium_personal_signer_verifier_lib::{
+    command, context::AppCtx, error::AppError, types::AppState,
+};
 
 pub struct LockPanel {
     passphrase: String,
@@ -68,28 +71,25 @@ impl LockPanel {
 
             match command::unlock_app(&self.passphrase, state, ctx) {
                 Ok(()) => {
-                    // Provide a default success message since the result is unit type.
-                    self.msg.set_success("App unlocked successfully.");
-
-                    let ks_ok = state
-            .keyfile_state
-            .lock()
-            .map(|ks| {
-                *ks == sigillum_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted
-            })
-            .unwrap_or(false);
-
-                    if ks_ok {
-                        self.msg.clear();
-                        *route = return_route.take().unwrap_or(Route::Sign);
-                    }
+                    self.msg.clear();
+                    *route = return_route.take().unwrap_or(Route::Sign);
                 }
-                Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
-            }
 
-            if let Ok(ks) = state.keyfile_state.lock() {
-                if *ks == sigillum_personal_signer_verifier_lib::types::KeyfileState::Corrupted {
-                    *route = Route::CreateKeyfile;
+                Err(AppError::KeyfileQuarantined { .. }) => {
+                    // Quarantine is surfaced on the Select Keyfile panel.
+                    self.msg.clear();
+                    *return_route = None;
+                    *route = Route::KeyfileSelect;
+                }
+
+                Err(AppError::KeyfileMissing { .. }) => {
+                    self.msg.clear();
+                    *return_route = None;
+                    *route = Route::KeyfileSelect;
+                }
+
+                Err(e) => {
+                    self.msg.from_app_error(&e, ctx.debug_ui);
                 }
             }
 

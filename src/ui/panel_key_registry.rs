@@ -1,11 +1,8 @@
 // src/ui/panel_key_registry.rs
 
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
-    command,
-    command_state::lock_session,
-    context::AppCtx,
-    types::{self, AppState},
+use sigillium_personal_signer_verifier_lib::{
+    command, command_state::lock_session, context::AppCtx, error::AppError, types::AppState,
 };
 
 use super::Route;
@@ -89,6 +86,10 @@ impl KeyRegistryPanel {
                         "active_key_select",
                         &metas,
                     ) {
+                        if let AppError::KeyfileQuarantined { .. } = e {
+                            *route = Route::KeyfileSelect;
+                            return;
+                        }
                         self.msg.from_app_error(&e, ctx.debug_ui);
                     }
 
@@ -224,7 +225,8 @@ impl KeyRegistryPanel {
                                 let assoc_opt = if assoc.is_empty() { None } else { Some(assoc) };
 
                                 // IMPORTANT: pass domain exactly as entered; command decides whether to normalize/validate.
-                                let (ks, res) = command::install_key(
+                                let res = command::install_key(
+
                                     mnemonic,
                                     &self.domain,
                                     label,
@@ -234,14 +236,8 @@ impl KeyRegistryPanel {
                                     ctx,
                                 );
 
-                                if let Ok(mut g) = state.keyfile_state.lock() {
-                                    *g = ks;
-                                }
-
-                                if ks
-                                    != sigillum_personal_signer_verifier_lib::types::KeyfileState::NotCorrupted
-                                {
-                                    *route = Route::CreateKeyfile;
+                                if res.is_err() {
+                                    *route = Route::KeyfileSelect;
                                 }
 
                                 match res {
@@ -253,7 +249,13 @@ impl KeyRegistryPanel {
                                         self.associated_key_id.clear();
                                         self.enforce_standard_domain = true;
                                     }
-                                    Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
+                                    Err(e) => {
+                                        if let AppError::KeyfileQuarantined { .. } = e {
+                                            *route = Route::KeyfileSelect;
+                                            return;
+                                        }
+                                        self.msg.from_app_error(&e, ctx.debug_ui)
+                                    }
                                 }
                             }
 
@@ -328,21 +330,19 @@ impl KeyRegistryPanel {
                                     self.confirm_uninstall = false;
                                     self.clear_messages();
 
-                                    let (ks, res) = command::uninstall_active_key(state, ctx);
-
-                                    if let Ok(mut g) = state.keyfile_state.lock() {
-                                        *g = ks;
-                                    }
-
-                                    if ks != types::KeyfileState::NotCorrupted {
-                                        *route = Route::CreateKeyfile;
-                                    }
+                                    let res = command::uninstall_active_key(state, ctx);
 
                                     match res {
                                         Ok(()) => {
                                             self.msg.set_success("Key uninstalled successfully.");
                                         }
-                                        Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
+                                        Err(e) => {
+                                            if let AppError::KeyfileQuarantined { .. } = e {
+                                                *route = Route::KeyfileSelect;
+                                                return;
+                                            }
+                                            self.msg.from_app_error(&e, ctx.debug_ui)
+                                        }
                                     }
                                 }
                             });

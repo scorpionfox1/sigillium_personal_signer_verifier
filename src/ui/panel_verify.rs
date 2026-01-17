@@ -4,10 +4,11 @@ use super::Route;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 use eframe::egui;
-use sigillum_personal_signer_verifier_lib::{
+use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
+    error::AppError,
     types::{AppState, KeyId, SignVerifyMode},
 };
 
@@ -51,6 +52,10 @@ impl VerifyPanel {
                 if let Err(e) =
                     widgets::active_key_selector(ui, state, ctx, route, "verify_active_key", &metas)
                 {
+                    if let AppError::KeyfileQuarantined { .. } = e {
+                        *route = Route::KeyfileSelect;
+                        return;
+                    }
                     self.msg.from_app_error(&e, ctx.debug_ui);
                 }
 
@@ -104,7 +109,7 @@ impl VerifyPanel {
                 } else {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.pubkey_hex)
-                            .hint_text("Paste 64-char hex public key…"),
+                            .hint_text("Paste hex public key…"),
                     );
                 }
 
@@ -200,7 +205,13 @@ impl VerifyPanel {
                         match command::verify_payload(pk_hex, payload, sig_b64, mode, None) {
                             Ok(true) => self.msg.set_success("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),
-                            Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
+                            Err(e) => {
+                                if let AppError::KeyfileQuarantined { .. } = e {
+                                    *route = Route::KeyfileSelect;
+                                    return;
+                                }
+                                self.msg.from_app_error(&e, ctx.debug_ui)
+                            }
                         }
                     }
 

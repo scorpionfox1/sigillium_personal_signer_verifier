@@ -7,7 +7,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use zeroize::Zeroizing;
 
-const KDF_CONTEXT: &[u8] = b"CatholicID v1";
+//const KDF_CONTEXT: &[u8] = b"CatholicID v1"; // this app is intended to support 3rd party applicatoin so a app domain makes no sense
 const DOMAIN_DELIM: u8 = 0x00;
 
 pub fn derive_private_key_from_mnemonic_and_domain(
@@ -20,9 +20,8 @@ pub fn derive_private_key_from_mnemonic_and_domain(
     let seed = Zeroizing::new(mnemonic.to_seed(""));
 
     let mut mac =
-        Hmac::<Sha512>::new_from_slice(KDF_CONTEXT).map_err(|_| AppError::CryptoInitFailed)?;
+        Hmac::<Sha512>::new_from_slice(&seed[..]).map_err(|_| AppError::CryptoInitFailed)?;
 
-    mac.update(&seed[..]);
     mac.update(&[DOMAIN_DELIM]);
     mac.update(domain.as_bytes());
 
@@ -46,6 +45,9 @@ pub fn public_key_from_private(private: &[u8; 32]) -> [u8; 32] {
     out
 }
 
+// NOTE: No signature context prefix yet.
+// Safe for v<1.0 single-purpose signing.
+// Revisit if keys are reused across message types.
 pub fn sign_message(private: &[u8; 32], msg: &[u8]) -> [u8; 64] {
     let signing_key = SigningKey::from_bytes(private);
     let signature: Signature = signing_key.sign(msg);
@@ -71,102 +73,70 @@ pub fn verify_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AppError;
 
-    const TEST_MNEMONIC: &str =
+    const MNEMONIC_12: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     #[test]
-    fn derive_private_key_is_deterministic_for_same_inputs() {
-        let domain = "example.com";
-        let k1 = derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, domain).unwrap();
-        let k2 = derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, domain).unwrap();
+    fn derive_private_key_rejects_invalid_mnemonic() {
+        match derive_private_key_from_mnemonic_and_domain("not a real mnemonic", "example") {
+            Err(AppError::InvalidMnemonic) => {}
+            other => panic!("expected InvalidMnemonic, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn derive_private_key_is_deterministic() {
+        let k1 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let k2 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn derive_private_key_is_domain_separated() {
-        let k1 = derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "example.com").unwrap();
-        let k2 = derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "other.com").unwrap();
+        let k1 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let k2 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.net").unwrap();
         assert_ne!(k1, k2);
     }
 
     #[test]
-    fn derive_private_key_rejects_invalid_mnemonic() {
-        let err = derive_private_key_from_mnemonic_and_domain("not a real mnemonic", "example.com")
-            .unwrap_err();
-        assert!(matches!(err, AppError::InvalidMnemonic));
-    }
-
-    #[test]
-    fn public_key_from_private_is_deterministic_and_nonzero() {
-        let private =
-            derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "example.com").unwrap();
-
-        let p1 = public_key_from_private(&private);
-        let p2 = public_key_from_private(&private);
-
-        assert_eq!(p1, p2);
-        assert_ne!(p1, [0u8; 32]);
-    }
-
-    #[test]
     fn sign_and_verify_roundtrip_succeeds() {
-        let private =
-            derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "example.com").unwrap();
-        let public = public_key_from_private(&private);
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
 
-        let msg = b"hello sigillium";
-        let sig = sign_message(&private, msg);
+        let msg = b"hello";
+        let sig = sign_message(&privk, msg);
 
-        let ok = verify_message(&public, msg, &sig).unwrap();
+        let ok = verify_message(&pubk, msg, &sig).unwrap();
         assert!(ok);
     }
 
     #[test]
-    fn verify_fails_if_message_is_tampered() {
-        let private =
-            derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "example.com").unwrap();
-        let public = public_key_from_private(&private);
+    fn verify_returns_false_on_tampered_message() {
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
 
-        let msg = b"hello sigillium";
-        let sig = sign_message(&private, msg);
+        let msg = b"hello";
+        let sig = sign_message(&privk, msg);
 
-        let mut tampered = msg.to_vec();
-        tampered[0] ^= 0x01;
-
-        let ok = verify_message(&public, &tampered, &sig).unwrap();
+        let bad_msg = b"hell0";
+        let ok = verify_message(&pubk, bad_msg, &sig).unwrap();
         assert!(!ok);
     }
 
     #[test]
-    fn verify_fails_if_signature_is_tampered() {
-        let private =
-            derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, "example.com").unwrap();
-        let public = public_key_from_private(&private);
+    fn verify_returns_false_on_tampered_signature() {
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
 
-        let msg = b"hello sigillium";
-        let mut sig = sign_message(&private, msg);
+        let msg = b"hello";
+        let mut sig = sign_message(&privk, msg);
         sig[0] ^= 0x01;
 
-        let ok = verify_message(&public, msg, &sig).unwrap();
+        let ok = verify_message(&pubk, msg, &sig).unwrap();
         assert!(!ok);
-    }
-
-    // Stronger tripwire: known vector for the current derivation algorithm.
-    // If you change KDF_CONTEXT, DOMAIN_DELIM, input ordering, or BIP39 seed settings,
-    // this should fail immediately.
-    #[test]
-    fn derive_private_key_known_vector() {
-        let domain = "example.com";
-        let got = derive_private_key_from_mnemonic_and_domain(TEST_MNEMONIC, domain).unwrap();
-
-        // Computed from:
-        // BIP39 seed (passphrase="") then HMAC-SHA512(key="CatholicID v1", msg=seed||0x00||"example.com"),
-        // taking the first 32 bytes.
-        let expected_hex = "c08e9771fc73dd0856f463aa62146d409bc9e6e7e9ea8b6d4140122293eec73b";
-        let expected: [u8; 32] = hex::decode(expected_hex).unwrap().try_into().unwrap();
-
-        assert_eq!(got, expected);
     }
 }

@@ -12,6 +12,30 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
 
+fn current_user_principal() -> Option<String> {
+    // Try SID via `whoami /user`
+    if let Ok(out) = Command::new("whoami").arg("/user").output() {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                if line.starts_with("USER SID") {
+                    continue;
+                }
+                if let Some(sid) = line.split_whitespace().last() {
+                    if sid.starts_with("S-1-") {
+                        return Some(format!("*{}", sid));
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: DOMAIN\USERNAME
+    let user = std::env::var("USERNAME").ok()?;
+    let domain = std::env::var("USERDOMAIN").ok()?;
+    Some(format!("{}\\{}", domain, user))
+}
+
 pub fn harden_process_best_effort() -> Vec<BestEffortFailure> {
     // Linux hardens against core dumps (PR_SET_DUMPABLE=0, RLIMIT_CORE=0).
     //
@@ -172,7 +196,6 @@ fn temp_rename_target(path: &Path) -> PathBuf {
 //
 // We use `icacls` as a best-effort ACL hardening mechanism without introducing
 // additional Windows security bindings.
-
 pub fn restrict_dir_perms_best_effort(path: &Path) -> Option<BestEffortFailure> {
     icacls_lockdown_best_effort(
         path,
@@ -196,21 +219,24 @@ fn icacls_lockdown_best_effort(
 ) -> Option<BestEffortFailure> {
     let p = path.to_string_lossy().to_string();
 
-    let user = match std::env::var("USERNAME") {
-        Ok(u) if !u.trim().is_empty() => u,
-        _ => {
+    let principal = match current_user_principal() {
+        Some(p) => p,
+        None => {
             return Some(BestEffortFailure {
-                kind: "windows_username_env_missing",
+                kind: "windows_user_principal_unresolved",
                 errno: None,
-                msg: "USERNAME env var missing; cannot icacls lockdown best-effort",
+                msg: "Unable to resolve current user principal for icacls",
             });
         }
     };
 
-    // Remove inheritance.
-    let status1 = Command::new("icacls").args([&p, "/inheritance:r"]).status();
+    let grant_ok = Command::new("icacls")
+        .args([&p, &format!("/grant {}:(F)", principal)])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
 
-    if status1.as_ref().map(|s| s.success()).unwrap_or(false) == false {
+    if !grant_ok {
         return Some(BestEffortFailure {
             kind,
             errno: None,
@@ -218,13 +244,27 @@ fn icacls_lockdown_best_effort(
         });
     }
 
-    // Grant only current user full control (replace existing grants for that user).
-    let grant = format!("{}:(F)", user);
-    let status2 = Command::new("icacls")
-        .args([&p, "/grant:r", &grant])
-        .status();
+    let inheritance_ok = Command::new("icacls")
+        .args([&p, "/inheritance:r"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
 
-    if status2.as_ref().map(|s| s.success()).unwrap_or(false) {
+    if !inheritance_ok {
+        return Some(BestEffortFailure {
+            kind,
+            errno: None,
+            msg,
+        });
+    }
+
+    let regrant_ok = Command::new("icacls")
+        .args([&p, &format!("/grant:r {}:(F)", principal)])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if regrant_ok {
         None
     } else {
         Some(BestEffortFailure {
