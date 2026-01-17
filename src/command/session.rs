@@ -8,8 +8,6 @@ use crate::keyfile::inspect::inspect_keyfile;
 use crate::keyfile::{lock_private_key32_best_effort, unlock_private_key32_best_effort};
 use crate::security_log::record_best_effort_platform_failures;
 use crate::types::{AppState, KeyId, SecretsState};
-use std::thread;
-use std::time::Duration;
 use zeroize::Zeroizing;
 
 pub fn get_status(state: &AppState) -> AppResult<bool> {

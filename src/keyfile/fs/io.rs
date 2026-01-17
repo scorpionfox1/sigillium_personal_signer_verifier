@@ -288,14 +288,11 @@ mod tests {
 
         // Temp file should be best-effort cleaned up.
         let leftovers = list_tmp_keyfile_files(&dir);
-        assert!(
-            leftovers.is_empty(),
-            "expected no .keyfile.*.tmp leftovers, found: {leftovers:?}"
-        );
+        assert!(leftovers.is_empty());
     }
 
     #[test]
-    fn backup_keyfile_moves_to_corrupt_prefix() {
+    fn backup_keyfile_moves_to_quarantine_prefix() {
         let dir = mk_temp_dir("io_backup_basic");
         let path = dir.join(KEYFILE_FILENAME);
 
@@ -307,8 +304,14 @@ mod tests {
         assert!(!path.exists());
         assert!(backup.exists());
 
+        let fname = Path::new(KEYFILE_FILENAME)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
         let name = backup.file_name().unwrap().to_string_lossy().to_string();
-        assert!(name.starts_with("corrupt.keyfile.json"));
+        assert_eq!(name, format!("quarantine.{fname}"));
     }
 
     #[test]
@@ -316,8 +319,14 @@ mod tests {
         let dir = mk_temp_dir("io_backup_collision");
         let path = dir.join(KEYFILE_FILENAME);
 
+        let fname = Path::new(KEYFILE_FILENAME)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
         // Pre-create the first candidate so it collides.
-        let colliding = dir.join("corrupt.keyfile.json");
+        let colliding = dir.join(format!("quarantine.{fname}"));
         fs::write(&colliding, b"already-here").unwrap();
         assert!(colliding.exists());
 
@@ -328,7 +337,7 @@ mod tests {
         assert!(backup.exists());
 
         let name = backup.file_name().unwrap().to_string_lossy().to_string();
-        assert_eq!(name, "corrupt.1.keyfile.json");
+        assert_eq!(name, format!("quarantine.1.{fname}"));
     }
 
     #[test]

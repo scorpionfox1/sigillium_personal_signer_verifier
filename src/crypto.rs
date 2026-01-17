@@ -69,3 +69,74 @@ pub fn verify_message(
 // ======================================================
 // Unit Tests
 // ======================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MNEMONIC_12: &str =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    #[test]
+    fn derive_private_key_rejects_invalid_mnemonic() {
+        match derive_private_key_from_mnemonic_and_domain("not a real mnemonic", "example") {
+            Err(AppError::InvalidMnemonic) => {}
+            other => panic!("expected InvalidMnemonic, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn derive_private_key_is_deterministic() {
+        let k1 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let k2 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        assert_eq!(k1, k2);
+    }
+
+    #[test]
+    fn derive_private_key_is_domain_separated() {
+        let k1 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let k2 = derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.net").unwrap();
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn sign_and_verify_roundtrip_succeeds() {
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
+
+        let msg = b"hello";
+        let sig = sign_message(&privk, msg);
+
+        let ok = verify_message(&pubk, msg, &sig).unwrap();
+        assert!(ok);
+    }
+
+    #[test]
+    fn verify_returns_false_on_tampered_message() {
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
+
+        let msg = b"hello";
+        let sig = sign_message(&privk, msg);
+
+        let bad_msg = b"hell0";
+        let ok = verify_message(&pubk, bad_msg, &sig).unwrap();
+        assert!(!ok);
+    }
+
+    #[test]
+    fn verify_returns_false_on_tampered_signature() {
+        let privk =
+            derive_private_key_from_mnemonic_and_domain(MNEMONIC_12, "example.com").unwrap();
+        let pubk = public_key_from_private(&privk);
+
+        let msg = b"hello";
+        let mut sig = sign_message(&privk, msg);
+        sig[0] ^= 0x01;
+
+        let ok = verify_message(&pubk, msg, &sig).unwrap();
+        assert!(!ok);
+    }
+}

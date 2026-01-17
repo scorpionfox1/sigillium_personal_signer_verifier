@@ -4,7 +4,6 @@ use crate::context::AppCtx;
 use crate::{keyfile, types::AppState};
 
 pub mod json_ops;
-pub mod keyfile_inspect;
 pub mod keyfile_lifecycle;
 pub mod keyfile_mutation;
 pub mod session;

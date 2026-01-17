@@ -209,3 +209,154 @@ fn validate_standard_domain_ascii(raw: &str) -> AppResult<String> {
 
     Ok(s)
 }
+
+// ======================================================
+// Unit Tests
+// ======================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::AppCtx;
+    use crate::types::{AppState, SessionState};
+    use tempfile::tempdir;
+
+    fn mk_state_locked() -> AppState {
+        AppState {
+            session: std::sync::Mutex::new(SessionState {
+                unlocked: false,
+                active_key_id: None,
+                active_associated_key_id: None,
+            }),
+            secrets: std::sync::Mutex::new(None),
+            keys: std::sync::Mutex::new(Vec::new()),
+            sign_verify_mode: std::sync::Mutex::new(crate::types::SignVerifyMode::Text),
+            security_log: std::sync::Mutex::new(
+                crate::security_log::SecurityLog::init(std::env::temp_dir().as_path()).unwrap(),
+            ),
+        }
+    }
+
+    // --------------------------------------------------
+    // validate_standard_domain_ascii
+    // --------------------------------------------------
+
+    #[test]
+    fn validate_standard_domain_ascii_accepts_valid_domains() {
+        assert_eq!(
+            validate_standard_domain_ascii("example.com").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            validate_standard_domain_ascii("EXAMPLE.COM").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            validate_standard_domain_ascii("a-b_c/1").unwrap(),
+            "a-b_c/1"
+        );
+    }
+
+    #[test]
+    fn validate_standard_domain_ascii_rejects_invalid_domains() {
+        for bad in ["Exämple.com", "example!.com", "example com"] {
+            assert!(
+                validate_standard_domain_ascii(bad).is_err(),
+                "expected invalid: {bad}"
+            );
+        }
+    }
+
+    // --------------------------------------------------
+    // install_key (early validation only)
+    // --------------------------------------------------
+
+    #[test]
+    fn install_key_rejects_empty_mnemonic() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = install_key("", "example.com", "label", None, true, &state, &ctx).unwrap_err();
+
+        assert!(matches!(err, AppError::EmptyMnemonic));
+    }
+
+    #[test]
+    fn install_key_rejects_empty_label() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = install_key(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "example.com",
+            "",
+            None,
+            true,
+            &state,
+            &ctx,
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::EmptyLabel));
+    }
+
+    #[test]
+    fn install_key_rejects_invalid_standard_domain() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = install_key(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "exämple.com",
+            "label",
+            None,
+            true,
+            &state,
+            &ctx,
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::InvalidStandardDomain));
+    }
+
+    // --------------------------------------------------
+    // uninstall_active_key (early failure)
+    // --------------------------------------------------
+
+    #[test]
+    fn uninstall_active_key_fails_when_no_active_key_selected() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = uninstall_active_key(&state, &ctx).unwrap_err();
+        assert!(matches!(err, AppError::Msg(_)));
+    }
+
+    // --------------------------------------------------
+    // change_passphrase (early validation only)
+    // --------------------------------------------------
+
+    #[test]
+    fn change_passphrase_rejects_invalid_old_passphrase() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = change_passphrase("", "newpassphrase", &state, &ctx).unwrap_err();
+        assert!(matches!(err, AppError::Msg(_)));
+    }
+
+    #[test]
+    fn change_passphrase_rejects_invalid_new_passphrase() {
+        let state = mk_state_locked();
+        let td = tempdir().unwrap();
+        let ctx = AppCtx::new(td.path().to_path_buf());
+
+        let err = change_passphrase("oldpassphrase", "", &state, &ctx).unwrap_err();
+        assert!(matches!(err, AppError::Msg(_)));
+    }
+}
