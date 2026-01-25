@@ -245,7 +245,7 @@ r#"{
                         let after = command::sign_verify::replace_tags(before.as_str(), active_assoc_id.as_str());
 
                         if after == before {
-                            self.msg.set_success("No meta-tags found.");
+                            self.msg.set_info("No meta-tags found.");
                         } else {
                             self.message = after;
                             self.msg.set_success("Meta-tags replaced.");
