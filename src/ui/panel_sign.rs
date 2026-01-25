@@ -43,24 +43,25 @@ impl SignPanel {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
+        ui.heading("Sign");
+        ui.separator();
+
+        // Active key selector outside scroll area
+        let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
+        if let Err(e) =
+            widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
+        {
+            if let AppError::KeyfileQuarantined { .. } = e {
+                *route = Route::KeyfileSelect;
+                return;
+            }
+            self.msg.from_app_error(&e, ctx.debug_ui);
+        }
+        ui.add_space(10.0);
+
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Sign");
-                ui.separator();
-
-                // Active key selector
-                let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-                if let Err(e) =
-                    widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
-                {
-                    if let AppError::KeyfileQuarantined { .. } = e {
-                        *route = Route::KeyfileSelect;
-                        return;
-                    }
-                    self.msg.from_app_error(&e, ctx.debug_ui);
-                }
-                ui.add_space(10.0);
 
                 let current_active_id = lock_session(state).ok().and_then(|g| g.active_key_id);
 
@@ -236,7 +237,7 @@ r#"{
                     }
 
                     if ui
-                        .add_enabled(!self.message.trim().is_empty(), egui::Button::new("Replace meta-tags"))
+                        .add_enabled(!self.message.trim().is_empty(), egui::Button::new("Replace message tags"))
                         .clicked()
                     {
                         self.clear_messages();
@@ -245,10 +246,10 @@ r#"{
                         let after = command::sign_verify::replace_tags(before.as_str(), active_assoc_id.as_str());
 
                         if after == before {
-                            self.msg.set_info("No meta-tags found.");
+                            self.msg.set_info("No tags found.");
                         } else {
                             self.message = after;
-                            self.msg.set_success("Meta-tags replaced.");
+                            self.msg.set_success("Tags replaced.");
                         }
                     }
 

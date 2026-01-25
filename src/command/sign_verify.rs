@@ -200,10 +200,10 @@ fn create_signature_record(
 
     // Always-included fields (with optional rename)
     let payload_name = config
-        .get("payload_name")
+        .get("msg_name")
         .and_then(|v| v.as_str())
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or("payload");
+        .unwrap_or("message");
 
     let signature_name = config
         .get("signature_name")
@@ -236,7 +236,13 @@ fn create_signature_record(
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or("assoc_key_id");
 
-            record.insert(name.to_string(), Value::String(id));
+            let value = if id.trim().is_empty() {
+                Value::Null
+            } else {
+                Value::String(id)
+            };
+
+            record.insert(name.to_string(), value);
         }
     }
 
