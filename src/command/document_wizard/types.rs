@@ -11,11 +11,11 @@ use std::collections::{BTreeMap, BTreeSet};
 ///   "canonical_id": "{{assoc_key_id}}",
 ///   "docs": [
 ///      {
-///        "doc_identity": { "id": "...", "label": "...", "ver": "v1.0" },
-///        "doc_hash": { "hash": "...", "algo": "sha256" },
-///        "doc_inputs": { ... }
+///        "doc_identity": { "id":  "label":  "ver": "v1.0" },
+///        "doc_hash": { "hash":  "algo": "sha256" },
+///        "doc_inputs": {  }
 ///      },
-///      ...
+///
 ///   ]
 /// }
 pub const BUNDLE_TAG_SIGNED_UTC: &str = "{{signed_utc}}";

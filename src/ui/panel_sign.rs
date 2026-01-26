@@ -155,7 +155,7 @@ impl SignPanel {
                                 egui::TextEdit::multiline(&mut self.schema)
                                     .desired_rows(6)
                                     .hint_text(
-                                        "{ \"$schema\": \"https://json-schema.org/draft/2020-12/schema\", ... }",
+                                        "{ \"$schema\": \"https://json-schema.org/draft/2020-12/schema\", }",
                                     ),
                             );
                             ui.add_space(10.0);

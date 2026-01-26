@@ -62,14 +62,7 @@ pub struct InputSpec {
     pub input_type: InputType,
     pub required: bool,
 
-    /// Optional validators like:
-    /// - "uuid"
-    /// - "hex"
-    /// - "regex:^...$"
-    /// - "min_len:3"
-    /// - "max_len:64"
-    /// - "min:0"
-    /// - "max:100"
+    /// for data type and property validators
     pub validators: Option<Vec<String>>,
 
     /// For enum inputs.
