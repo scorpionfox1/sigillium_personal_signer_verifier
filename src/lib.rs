@@ -11,6 +11,7 @@ pub mod keyfile;
 pub mod keyfile_store;
 pub mod platform;
 pub mod security_log;
+pub mod template;
 pub mod types;
 
 use crate::security_log::SecurityLog;

@@ -424,10 +424,10 @@ mod tests {
 
         let v: Value = serde_json::from_str(&out).expect("json");
         let obj = v.as_object().expect("object");
-        assert!(obj.contains_key("payload"));
+        assert!(obj.contains_key("message"));
         assert!(obj.contains_key("signature"));
         assert!(obj.contains_key("pub_key"));
-        assert!(!obj.contains_key("key_id")); // key_id only when assoc_key_id_name present
+        assert!(!obj.contains_key("assoc_key_id")); // key_id only when assoc_key_id_name present
     }
 
     #[test]

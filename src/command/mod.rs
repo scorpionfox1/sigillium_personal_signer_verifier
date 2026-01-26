@@ -3,6 +3,7 @@
 use crate::context::AppCtx;
 use crate::{keyfile, types::AppState};
 
+pub mod document_wizard;
 pub mod json_ops;
 pub mod keyfile_lifecycle;
 pub mod keyfile_mutation;
