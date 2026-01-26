@@ -140,7 +140,14 @@ impl SignPanel {
                 // ---- Message (left) + Schema/Config (right)
                 ui.columns(2, |cols| {
                     // LEFT: message
-                    cols[0].label("Message");
+                    cols[0].horizontal(|ui| {
+                        ui.label("Message");
+                        let ok = !self.message.trim().is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy message") {
+                            ui.ctx().copy_text(self.message.clone());
+                        }
+                    });
+
                     cols[0].add(
                         egui::TextEdit::multiline(&mut self.message)
                             .desired_rows(12)

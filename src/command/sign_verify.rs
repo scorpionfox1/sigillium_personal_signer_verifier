@@ -33,39 +33,26 @@ pub fn sign_payload(
     // bytes we will sign
     let msg_bytes = Zeroizing::new(msg.as_bytes().to_vec());
 
-    // payload string we will store in the record (when Record mode)
-    //
-    // Rule:
-    // - Text: payload is the original text
-    // - Json: payload is canonical JSON text (object-canonical form)
-    let payload_for_record: Option<String> = match sign_verify_mode {
-        SignVerifyMode::Text => Some(msg.to_string()),
-        SignVerifyMode::Json => {
-            let s = std::str::from_utf8(&msg_bytes)
-                .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
-            let instance: Value =
-                serde_json::from_str(s).map_err(|e| AppError::InvalidJson(e.to_string()))?;
-            Some(crate::json_canon::canonical_value_object_string(&instance)?)
-        }
-    };
-
     // What we sign:
-    // - Text: sign raw bytes
-    // - Json: sign canonical hash (existing behavior in json_ops)
-    let to_sign: Zeroizing<Vec<u8>> = match sign_verify_mode {
-        SignVerifyMode::Text => Zeroizing::new((*msg_bytes).clone()),
-        SignVerifyMode::Json => {
-            let s = std::str::from_utf8(&msg_bytes)
-                .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
+    let (to_sign, payload_json_for_record): (Zeroizing<Vec<u8>>, Option<Value>) =
+        match sign_verify_mode {
+            SignVerifyMode::Text => (Zeroizing::new((*msg_bytes).clone()), None),
 
-            let digest = match schema_json {
-                Some(schema) => json_ops::canonicalize_json_2020_12(s, schema)?,
-                None => json_ops::canonicalize_json(s)?,
-            };
+            SignVerifyMode::Json => {
+                let s = std::str::from_utf8(&msg_bytes)
+                    .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
 
-            Zeroizing::new(digest.to_vec())
-        }
-    };
+                let instance: Value =
+                    serde_json::from_str(s).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+
+                let digest = match schema_json {
+                    Some(schema) => json_ops::canonicalize_json_2020_12(s, schema)?,
+                    None => json_ops::canonicalize_json(s)?,
+                };
+
+                (Zeroizing::new(digest.to_vec()), Some(instance))
+            }
+        };
 
     let sig = crate::command_state::with_active_private(state, |privk| {
         Ok(crypto::sign_message(&*privk, &to_sign))
@@ -106,12 +93,10 @@ pub fn sign_payload(
         hex::encode(key.public_key)
     };
 
-    let payload_str =
-        payload_for_record.ok_or_else(|| AppError::MissingField("payload missing".into()))?;
-
     let record_value = create_signature_record(
         &config,
-        &payload_str,
+        msg,
+        payload_json_for_record.as_ref(),
         &sig_base64,
         &pub_key_hex,
         active_associated_key_id,
@@ -128,7 +113,7 @@ pub fn verify_payload(
     msg: &str,
     signature_b64: &str,
     mode: SignVerifyMode,
-    _schema_json: Option<&str>,
+    schema_json: Option<&str>,
 ) -> AppResult<bool> {
     if msg.is_empty() {
         return Err(AppError::EmptyPayload);
@@ -143,8 +128,11 @@ pub fn verify_payload(
             let s = std::str::from_utf8(&msg)
                 .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
 
-            // Schema is never used on verify; verification must reproduce the exact bytes signed.
-            let digest = json_ops::canonicalize_json(s)?;
+            let digest = match schema_json {
+                Some(schema) => json_ops::canonicalize_json_2020_12(s, schema)?,
+                None => json_ops::canonicalize_json(s)?,
+            };
+
             Zeroizing::new(digest.to_vec())
         }
     };
@@ -191,7 +179,8 @@ pub fn replace_tags(payload: &str, assoc_key_id: &str) -> String {
 
 fn create_signature_record(
     config: &Value,
-    payload: &str,
+    payload_text: &str,
+    payload_json: Option<&Value>,
     signature: &str,
     pub_key: &str,
     assoc_key_id: Option<String>,
@@ -199,9 +188,11 @@ fn create_signature_record(
     let mut record = serde_json::Map::new();
 
     // Always-included fields (with optional rename)
+    // (support both "payload_name" (UI) and the older "msg_name")
     let payload_name = config
-        .get("msg_name")
+        .get("payload_name")
         .and_then(|v| v.as_str())
+        .or_else(|| config.get("msg_name").and_then(|v| v.as_str()))
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("message");
 
@@ -217,7 +208,16 @@ fn create_signature_record(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("pub_key");
 
-    record.insert(payload_name.to_string(), Value::String(payload.to_string()));
+    // <-- key change: if JSON mode, embed as structured JSON value
+    if let Some(v) = payload_json {
+        record.insert(payload_name.to_string(), v.clone());
+    } else {
+        record.insert(
+            payload_name.to_string(),
+            Value::String(payload_text.to_string()),
+        );
+    }
+
     record.insert(
         signature_name.to_string(),
         Value::String(signature.to_string()),
@@ -225,9 +225,6 @@ fn create_signature_record(
     record.insert(pub_key_name.to_string(), Value::String(pub_key.to_string()));
 
     // Optional assoc_key_id field:
-    // Included IFF config contains "assoc_key_id_name" (even if unusable).
-    // If name is unusable, default to "assoc_key_id".
-    // Included only if assoc_key_id is Some.
     if config.get("assoc_key_id_name").is_some() {
         if let Some(id) = assoc_key_id {
             let name = config
