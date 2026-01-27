@@ -31,6 +31,12 @@ impl VerifyPanel {
         }
     }
 
+    pub fn apply_prefill(&mut self, payload: String, signature_b64: String) {
+        self.payload = payload;
+        self.signature_b64 = signature_b64;
+        self.msg.clear();
+    }
+
     pub fn clear_messages(&mut self) {
         self.msg.clear();
     }
@@ -72,7 +78,7 @@ impl VerifyPanel {
                 let prev_mode = mode;
 
                 ui.horizontal(|ui| {
-                    ui.label("Mode");
+                    ui.label("Sign mode");
                     ui.selectable_value(&mut mode, SignVerifyMode::Text, "Text");
                     ui.selectable_value(&mut mode, SignVerifyMode::Json, "JSON");
                 });
@@ -115,7 +121,13 @@ impl VerifyPanel {
 
                 ui.add_space(10.0);
 
-                ui.label("Signature (base64)");
+                ui.horizontal(|ui| {
+                    ui.label("Signature (base64)");
+                    let sig = self.signature_b64.trim();
+                    if widgets::copy_icon_button(ui, !sig.is_empty(), "Copy signature") {
+                        ui.ctx().copy_text(sig.to_string());
+                    }
+                });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.signature_b64)
                         .desired_rows(6)

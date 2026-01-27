@@ -73,3 +73,27 @@ The Document Wizard is provided as a helper workflow and is not part of the appl
 Sigillium Personal Signer / Verifier remains **pre-1.0**.
 
 The signing model and key storage format are stabilizing, while auxiliary tooling and UI flows may continue to change in future minor releases.
+
+## Release v0.5.1
+
+### Notes
+
+This is a **workflow and UX refinement release** for v0.5.  
+No cryptographic behavior, file formats, or signing semantics were changed.
+
+---
+
+## Notable Changes
+
+### Connected document → sign → verify workflow
+
+- Connected the Document Wizard directly to the signing panel via a **“Sign Doc Bundle”** action.
+- Signing a document bundle now automatically:
+  - selects JSON signing mode,
+  - enables signature record output, and
+  - pre-fills the signing payload.
+- Added a **“Verify signature”** action on the signing panel, allowing immediate verification of the produced signature (including extraction from signature records).
+- This enables a continuous, low-friction workflow:
+  **prepare document → sign → verify**, without manual copying or mode changes.
+
+These changes improve correctness and usability while preserving existing security and signing guarantees.

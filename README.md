@@ -109,6 +109,8 @@ This allows the signer to integrate cleanly with external registries, contract f
 
 In JSON signing mode, the payload is embedded as structured JSON (not as a JSON-encoded string).
 
+The signing panel also provides a shortcut action that allows the user to immediately navigate to the verification panel after signing, carrying the signed message and produced signature forward automatically. This enables quick confirmation that the signature produced is valid without manual copying or reconfiguration.
+
 ### JSON Schema validation
 
 When signing in JSON mode:
@@ -127,7 +129,7 @@ When signing in JSON mode:
 
 The application includes a **Document Wizard** as a convenience feature.
 
-The wizard allows users to load a JSON5 document template and step through a readable review-and-input flow, producing a structured JSON bundle suitable for signing.
+The wizard allows users to load a JSON5 document template and step through a readable review-and-input flow, producing a structured JSON bundle suitable for signing. At the end of the wizard flow after a document bundle is create there is a button which navigates to the signing panel and automatically brings the document bundle into the message dialogue to be signed.
 
 The wizard:
 - renders human-readable document text,
