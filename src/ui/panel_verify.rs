@@ -121,7 +121,13 @@ impl VerifyPanel {
 
                 ui.add_space(10.0);
 
-                ui.label("Signature (base64)");
+                ui.horizontal(|ui| {
+                    ui.label("Signature (base64)");
+                    let sig = self.signature_b64.trim();
+                    if widgets::copy_icon_button(ui, !sig.is_empty(), "Copy signature") {
+                        ui.ctx().copy_text(sig.to_string());
+                    }
+                });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.signature_b64)
                         .desired_rows(6)
