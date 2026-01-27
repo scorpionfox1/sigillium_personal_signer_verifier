@@ -4,9 +4,11 @@ use crate::ui::message::PanelMsgState;
 use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
-use sigillium_personal_signer_verifier_lib::types::AppState;
+use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+
+use super::{Route, RoutePrefill};
 
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
     self as dw, validate_current_section_inputs,
@@ -78,7 +80,14 @@ impl DocumentWizardPanel {
         self.msg.clear();
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, _state: &AppState, _ctx: &AppCtx) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _state: &AppState,
+        _ctx: &AppCtx,
+        route: &mut Route,
+        route_prefill: &mut Option<RoutePrefill>,
+    ) {
         let debug_ui = cfg!(debug_assertions);
 
         ui.heading("Document Wizard");
@@ -128,7 +137,15 @@ impl DocumentWizardPanel {
                         );
                     }
                     WizardPanelMode::ReviewBuild => {
-                        Self::ui_review_build_impl(ui, msg, bundle_out, mode_ref, wiz);
+                        Self::ui_review_build_impl(
+                            ui,
+                            msg,
+                            bundle_out,
+                            mode_ref,
+                            wiz,
+                            route,
+                            route_prefill,
+                        );
                     }
                 }
             });
@@ -282,7 +299,7 @@ impl DocumentWizardPanel {
                     }
                 }
 
-                let next_text = if at_last { "Review" } else { "Next" };
+                let next_text = "Next";
 
                 if ui
                     .add_enabled(can_next, egui::Button::new(next_text))
@@ -357,6 +374,8 @@ impl DocumentWizardPanel {
         bundle_out: &mut String,
         mode: &mut WizardPanelMode,
         wiz: &mut dw::WizardState,
+        route: &mut Route,
+        route_prefill: &mut Option<RoutePrefill>,
     ) {
         ui.heading("Review & Build");
         ui.add_space(6.0);
@@ -369,10 +388,10 @@ impl DocumentWizardPanel {
 
             let can_build = all_docs_have_no_template_errors(wiz);
             if ui
-                .add_enabled(can_build, egui::Button::new("Build Bundle JSON"))
+                .add_enabled(can_build, egui::Button::new("Build JSON Bundle"))
                 .clicked()
             {
-                match dw::build_bundle_json(wiz) {
+                match dw::build_json_bundle(wiz) {
                     Ok(v) => match serde_json::to_string_pretty(&v) {
                         Ok(s) => {
                             *bundle_out = s;
@@ -382,6 +401,19 @@ impl DocumentWizardPanel {
                     },
                     Err(e) => msg.set_warn(&format!("{e}")),
                 }
+            }
+
+            let can_sign_bundle = !bundle_out.trim().is_empty();
+            if ui
+                .add_enabled(can_sign_bundle, egui::Button::new("Sign Doc Bundle"))
+                .clicked()
+            {
+                *route_prefill = Some(RoutePrefill::ToSign {
+                    mode: SignVerifyMode::Json,
+                    output_mode: SignOutputMode::Record,
+                    message: bundle_out.trim().to_string(),
+                });
+                *route = Route::Sign;
             }
         });
 
@@ -403,7 +435,7 @@ impl DocumentWizardPanel {
                 d.doc_identity.label
             );
             egui::CollapsingHeader::new(title)
-                .default_open(i == wiz.doc_index)
+                .default_open(false)
                 .show(ui, |ui| {
                     if !d.template_errors.is_empty() {
                         ui.label("Template problems (must fix):");

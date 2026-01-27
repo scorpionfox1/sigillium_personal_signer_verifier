@@ -31,6 +31,12 @@ impl VerifyPanel {
         }
     }
 
+    pub fn apply_prefill(&mut self, payload: String, signature_b64: String) {
+        self.payload = payload;
+        self.signature_b64 = signature_b64;
+        self.msg.clear();
+    }
+
     pub fn clear_messages(&mut self) {
         self.msg.clear();
     }
@@ -72,7 +78,7 @@ impl VerifyPanel {
                 let prev_mode = mode;
 
                 ui.horizontal(|ui| {
-                    ui.label("Mode");
+                    ui.label("Sign mode");
                     ui.selectable_value(&mut mode, SignVerifyMode::Text, "Text");
                     ui.selectable_value(&mut mode, SignVerifyMode::Json, "JSON");
                 });

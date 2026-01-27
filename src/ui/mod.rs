@@ -35,7 +35,7 @@ use panel_verify::VerifyPanel;
 use sigillium_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
 use sigillium_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
-use sigillium_personal_signer_verifier_lib::types::AppState;
+use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route {
@@ -49,6 +49,20 @@ pub enum Route {
     Security,
 }
 
+#[derive(Clone, Debug)]
+pub enum RoutePrefill {
+    ToSign {
+        mode: SignVerifyMode,
+        output_mode: SignOutputMode,
+        message: String,
+    },
+    ToVerify {
+        mode: SignVerifyMode,
+        message: String,
+        signature_b64: String,
+    },
+}
+
 pub struct UiApp {
     state: Arc<AppState>,
     ctx: Arc<AppCtx>,
@@ -57,6 +71,8 @@ pub struct UiApp {
     last_route: Route,
     prev_route: Route,
     return_route: Option<Route>,
+
+    route_prefill: Option<RoutePrefill>,
 
     nav: LeftNav,
     keyfile_select: KeyfileSelectPanel,
@@ -96,6 +112,7 @@ impl UiApp {
             last_route: route,
             prev_route: route,
             return_route: None,
+            route_prefill: None,
             nav: LeftNav::new(),
             keyfile_select: KeyfileSelectPanel::new(),
             create_keyfile: CreateKeyfilePanel::new(),
@@ -147,6 +164,48 @@ impl UiApp {
         let dir = keyfile_path.parent()?;
         let name = dir.file_name()?.to_str()?;
         Some(name.to_string())
+    }
+    fn apply_route_prefill_if_any(&mut self) {
+        let Some(prefill) = self.route_prefill.take() else {
+            return;
+        };
+
+        match (self.route, prefill) {
+            (
+                Route::Sign,
+                RoutePrefill::ToSign {
+                    mode,
+                    output_mode,
+                    message,
+                },
+            ) => {
+                if let Ok(mut g) = self.state.sign_verify_mode.lock() {
+                    *g = mode;
+                }
+                if let Ok(mut g) = self.state.sign_output_mode.lock() {
+                    *g = output_mode;
+                }
+                self.sign.apply_prefill(message);
+            }
+
+            (
+                Route::Verify,
+                RoutePrefill::ToVerify {
+                    mode,
+                    message,
+                    signature_b64,
+                },
+            ) => {
+                if let Ok(mut g) = self.state.sign_verify_mode.lock() {
+                    *g = mode;
+                }
+                self.verify.apply_prefill(message, signature_b64);
+            }
+
+            (_, other) => {
+                self.route_prefill = Some(other);
+            }
+        }
     }
 }
 
@@ -212,6 +271,7 @@ impl eframe::App for UiApp {
                 self.last_activity = Instant::now();
             }
 
+            self.apply_route_prefill_if_any();
             self.prev_route = self.route;
         }
 
@@ -299,9 +359,13 @@ impl eframe::App for UiApp {
                     );
                 }
 
-                Route::Sign => self
-                    .sign
-                    .ui(ui, self.state.as_ref(), &self.ctx, &mut self.route),
+                Route::Sign => self.sign.ui(
+                    ui,
+                    self.state.as_ref(),
+                    &self.ctx,
+                    &mut self.route,
+                    &mut self.route_prefill,
+                ),
 
                 Route::Verify => {
                     self.verify
@@ -313,9 +377,13 @@ impl eframe::App for UiApp {
                         .ui(ui, self.state.as_ref(), &self.ctx, &mut self.route)
                 }
 
-                Route::DocumentWizard => {
-                    self.document_wizard.ui(ui, self.state.as_ref(), &self.ctx)
-                }
+                Route::DocumentWizard => self.document_wizard.ui(
+                    ui,
+                    self.state.as_ref(),
+                    &self.ctx,
+                    &mut self.route,
+                    &mut self.route_prefill,
+                ),
 
                 Route::Security => {
                     self.security

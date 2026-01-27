@@ -9,8 +9,10 @@ use sigillium_personal_signer_verifier_lib::{
     types::{AppState, SignOutputMode, SignVerifyMode},
 };
 
-use super::Route;
+use serde_json::Value as JsonValue;
+
 use super::{message::PanelMsgState, widgets};
+use super::{Route, RoutePrefill};
 
 pub struct SignPanel {
     message: String,
@@ -31,6 +33,13 @@ impl SignPanel {
         }
     }
 
+    pub fn apply_prefill(&mut self, message: String) {
+        self.message = message;
+        self.schema.clear();
+        self.output_text.clear();
+        self.msg.clear();
+    }
+
     pub fn clear_messages(&mut self) {
         self.msg.clear();
     }
@@ -42,7 +51,14 @@ impl SignPanel {
         self.output_text.clear();
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        state: &AppState,
+        ctx: &AppCtx,
+        route: &mut Route,
+        route_prefill: &mut Option<RoutePrefill>,
+    ) {
         ui.heading("Sign");
         ui.separator();
 
@@ -264,6 +280,42 @@ r#"{
                         self.reset_inputs();
                         self.clear_messages();
                     }
+
+                                        let can_jump_verify = !self.output_text.trim().is_empty() && !self.message.trim().is_empty();
+                    if ui
+                        .add_enabled(can_jump_verify, egui::Button::new("Verify signature"))
+                        .clicked()
+                    {
+                        // NOTE:
+                        // This relies on UI-local signature-record parsing.
+                        // If this behavior expands, move parsing out of the UI layer.
+                        let sig_b64 = if output_mode == SignOutputMode::Signature {
+                            self.output_text.trim().to_string()
+                        } else {
+                            let sig_field = self.signature_field_name_from_record_config();
+                            match Self::extract_signature_b64_from_record(self.output_text.trim(), sig_field.as_str()) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    self.msg.set_error(&e);
+                                    return;
+                                }
+                            }
+                        };
+
+                        let mode = state
+                            .sign_verify_mode
+                            .lock()
+                            .map(|g| *g)
+                            .unwrap_or(SignVerifyMode::Text);
+
+                        *route_prefill = Some(RoutePrefill::ToVerify {
+                            mode,
+                            message: self.message.trim().to_string(),
+                            signature_b64: sig_b64,
+                        });
+                        *route = Route::Verify;
+                    }
+
                 });
 
                 self.msg.show(ui, false);
@@ -327,5 +379,66 @@ r#"{
                     );
                 });
             });
+    }
+
+    // NOTE:
+    // This helper exists ONLY to support the Sign → Verify UI flow
+    // when the sign output mode is `record`.
+    //
+    // If signature-record parsing is ever needed outside of this UI
+    // (CLI, import, tests, or core verification paths), move this logic
+    // out of the UI layer.
+    fn signature_field_name_from_record_config(&self) -> String {
+        let raw = self.record_config.trim();
+        if raw.is_empty() {
+            return "signature".to_string();
+        }
+
+        let Ok(v) = serde_json::from_str::<JsonValue>(raw) else {
+            return "signature".to_string();
+        };
+
+        v.get("signature_name")
+            .and_then(|x| x.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("signature")
+            .to_string()
+    }
+
+    // NOTE:
+    // UI-only helper. See comment above.
+    fn extract_signature_b64_from_record(
+        record_json: &str,
+        signature_field: &str,
+    ) -> Result<String, String> {
+        let Ok(v) = serde_json::from_str::<JsonValue>(record_json) else {
+            return Err("Signature record is not valid JSON".to_string());
+        };
+
+        let Some(obj) = v.as_object() else {
+            return Err("Signature record JSON must be an object".to_string());
+        };
+
+        let Some(sig_val) = obj.get(signature_field) else {
+            return Err(format!(
+                "Signature record missing field '{signature_field}'"
+            ));
+        };
+
+        let Some(sig) = sig_val.as_str() else {
+            return Err(format!(
+                "Signature record field '{signature_field}' must be a string"
+            ));
+        };
+
+        let sig = sig.trim();
+        if sig.is_empty() {
+            return Err(format!(
+                "Signature record field '{signature_field}' is empty"
+            ));
+        }
+
+        Ok(sig.to_string())
     }
 }
