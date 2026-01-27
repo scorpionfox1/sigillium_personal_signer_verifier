@@ -71,6 +71,7 @@ pub struct InputSpec {
     /// For json inputs.
     /// Embedded JSON Schema object.
     pub schema: Option<JsonValue>,
+    pub sample_json: Option<JsonValue>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

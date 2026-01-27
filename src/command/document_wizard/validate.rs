@@ -7,6 +7,112 @@ use crate::{
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 
+trait ValidationSink {
+    fn missing_required(&mut self, spec: &InputSpec);
+    fn value_error(&mut self, spec: &InputSpec, err: WizardError);
+
+    fn stop_early(&self) -> bool;
+}
+
+struct DocSink {
+    err: Option<WizardError>,
+}
+
+impl DocSink {
+    fn new() -> Self {
+        Self { err: None }
+    }
+}
+
+impl ValidationSink for DocSink {
+    fn missing_required(&mut self, spec: &InputSpec) {
+        if self.err.is_some() {
+            return;
+        }
+        self.err = Some(WizardError::InputProblem(format!(
+            "missing required input: {}",
+            spec.key
+        )));
+    }
+
+    fn value_error(&mut self, _spec: &InputSpec, err: WizardError) {
+        if self.err.is_some() {
+            return;
+        }
+        self.err = Some(err);
+    }
+
+    fn stop_early(&self) -> bool {
+        true
+    }
+}
+
+struct SectionSink {
+    errors: Vec<String>,
+}
+
+impl SectionSink {
+    fn new() -> Self {
+        Self { errors: Vec::new() }
+    }
+}
+
+impl ValidationSink for SectionSink {
+    fn missing_required(&mut self, spec: &InputSpec) {
+        self.errors
+            .push(format!("Missing required: {} ({})", spec.label, spec.key));
+    }
+
+    fn value_error(&mut self, spec: &InputSpec, err: WizardError) {
+        self.errors
+            .push(format!("{} ({}): {}", spec.label, spec.key, err));
+    }
+
+    fn stop_early(&self) -> bool {
+        false
+    }
+}
+
+fn validate_inputs_against_specs(
+    inputs: &BTreeMap<String, JsonValue>,
+    specs: &[InputSpec],
+    sink: &mut impl ValidationSink,
+) {
+    for spec in specs {
+        let key = spec.key.as_str();
+        let v_opt = inputs.get(key);
+
+        // Required check: treat missing OR null as missing.
+        if spec.required {
+            let missing = match v_opt {
+                None => true,
+                Some(v) => v.is_null(),
+            };
+            if missing {
+                sink.missing_required(spec);
+                if sink.stop_early() {
+                    return;
+                }
+                continue;
+            }
+        }
+
+        let Some(v) = v_opt else {
+            continue; // optional + not provided
+        };
+        if v.is_null() {
+            continue; // optional + null treated as not provided
+        }
+
+        if let Err(e) = validate_input_value(key, spec, v) {
+            sink.value_error(spec, e);
+            if sink.stop_early() {
+                return;
+            }
+        }
+    }
+}
+
 /// Validate inputs for the current document:
 /// - required fields present and non-null (and non-empty for strings)
 /// - type checks (string/enum/number/int/date/bool/json)
@@ -31,27 +137,31 @@ pub fn validate_current_doc_inputs(state: &WizardState) -> Result<(), WizardErro
         }
     }
 
-    // Validate each declared input spec.
-    for (key, spec) in spec_map.iter() {
-        let v_opt = d.doc_inputs.get(key);
+    let specs: Vec<InputSpec> = spec_map.values().cloned().collect();
 
-        if spec.required {
-            if v_opt.is_none() {
-                return Err(WizardError::InputProblem(format!(
-                    "missing required input: {}",
-                    key
-                )));
-            }
-        }
+    let mut sink = DocSink::new();
+    validate_inputs_against_specs(&d.doc_inputs, &specs, &mut sink);
 
-        let Some(v) = v_opt else {
-            continue; // optional + not provided
-        };
-
-        validate_input_value(key, spec, v)?;
+    match sink.err {
+        Some(e) => Err(e),
+        None => Ok(()),
     }
+}
 
-    Ok(())
+pub fn validate_current_section_inputs(
+    wiz: &WizardState,
+    specs: &[InputSpec],
+) -> Result<(), String> {
+    let d = current_doc(wiz).map_err(|e| e.to_string())?;
+
+    let mut sink = SectionSink::new();
+    validate_inputs_against_specs(&d.doc_inputs, specs, &mut sink);
+
+    if sink.errors.is_empty() {
+        Ok(())
+    } else {
+        Err(sink.errors.join("\n"))
+    }
 }
 
 pub fn validate_input_value(key: &str, spec: &InputSpec, v: &JsonValue) -> Result<(), WizardError> {

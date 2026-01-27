@@ -169,20 +169,6 @@ pub fn validate_tag_coverage(
     }
 }
 
-/// Soft warning: inputs declared in the template but never referenced by a tag in the doc text.
-pub fn warn_unused_inputs(
-    referenced_tags: &BTreeSet<String>,
-    declared_inputs: &BTreeSet<String>,
-) -> Vec<String> {
-    let mut unused: Vec<String> = Vec::new();
-    for k in declared_inputs.iter() {
-        if !referenced_tags.contains(k) {
-            unused.push(k.clone());
-        }
-    }
-    unused
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,14 +229,6 @@ mod tests {
         let inputs = BTreeSet::from(["a".to_string()]);
         let err = validate_tag_coverage(&tags, &inputs).unwrap_err();
         assert!(err.contains("b"));
-    }
-
-    #[test]
-    fn warn_unused_inputs_lists_declared_not_used() {
-        let tags = BTreeSet::from(["a".to_string()]);
-        let inputs = BTreeSet::from(["a".to_string(), "b".to_string(), "c".to_string()]);
-        let unused = warn_unused_inputs(&tags, &inputs);
-        assert_eq!(unused, vec!["b".to_string(), "c".to_string()]);
     }
 
     #[test]

@@ -3,8 +3,7 @@
 use crate::command::document_wizard::validate_input_value;
 use crate::template::doc_wizard::{DocTemplate, HashAlgo, InputSpec};
 use crate::template::doc_wizard_verify::{
-    canonical_doc_text_from_sections, extract_input_tags, sha256_hex_of_text,
-    validate_tag_coverage, warn_unused_inputs,
+    canonical_doc_text_from_sections, extract_input_tags, sha256_hex_of_text, validate_tag_coverage,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::{BTreeMap, BTreeSet};
@@ -45,7 +44,7 @@ fn build_doc_run_state(doc: &DocTemplate) -> DocRunState {
     };
 
     let referenced_tags = extract_input_tags(&canonical_text);
-    let (declared_inputs, input_spec_map, mut template_errors, mut template_warnings) =
+    let (declared_inputs, input_spec_map, mut template_errors, template_warnings) =
         collect_declared_inputs(doc);
 
     // A) hash must match
@@ -61,16 +60,6 @@ fn build_doc_run_state(doc: &DocTemplate) -> DocRunState {
         template_errors.push(format!(
             "tag coverage failed for doc '{}': {}",
             doc.doc_identity.label, e
-        ));
-    }
-
-    // Soft warning: declared inputs never referenced by a tag
-    let unused = warn_unused_inputs(&referenced_tags, &declared_inputs);
-    if !unused.is_empty() {
-        template_warnings.push(format!(
-            "doc '{}' declares inputs never referenced by tags: {}",
-            doc.doc_identity.label,
-            unused.join(", ")
         ));
     }
 

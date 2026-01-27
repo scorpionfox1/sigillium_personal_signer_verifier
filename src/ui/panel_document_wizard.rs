@@ -8,7 +8,9 @@ use sigillium_personal_signer_verifier_lib::types::AppState;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use sigillium_personal_signer_verifier_lib::command::document_wizard as dw;
+use sigillium_personal_signer_verifier_lib::command::document_wizard::{
+    self as dw, validate_current_section_inputs,
+};
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -671,6 +673,25 @@ fn is_last_step(wiz: &dw::WizardState, section_index: usize, phase: WizardStepPh
     doc_index + 1 >= doc_count
 }
 
+fn ui_doc_text_window(ui: &mut egui::Ui, text: &mut String) {
+    // Expand with window: width directly; height approximated via rows.
+    let avail = ui.available_size();
+    let w = avail.x.max(300.0);
+
+    // Roughly: one text row ~= one line height.
+    let row_h = ui.text_style_height(&egui::TextStyle::Monospace).max(1.0);
+    let target_h = avail.y.max(260.0);
+    let rows = ((target_h / row_h).floor() as usize).max(10);
+
+    ui.add(
+        egui::TextEdit::multiline(text)
+            .desired_width(w)
+            .desired_rows(rows)
+            .font(egui::TextStyle::Monospace)
+            .interactive(false),
+    );
+}
+
 fn ui_section_text(
     ui: &mut egui::Ui,
     s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
@@ -689,23 +710,7 @@ fn ui_section_text(
             ui.add_space(6.0);
 
             let mut text = s.text.clone();
-
-            // Expand with window: width directly; height approximated via rows.
-            let avail = ui.available_size();
-            let w = avail.x.max(300.0);
-
-            // Roughly: one text row ~= one line height.
-            let row_h = ui.text_style_height(&egui::TextStyle::Monospace).max(1.0);
-            let target_h = avail.y.max(260.0);
-            let rows = ((target_h / row_h).floor() as usize).max(10);
-
-            ui.add(
-                egui::TextEdit::multiline(&mut text)
-                    .desired_width(w)
-                    .desired_rows(rows)
-                    .font(egui::TextStyle::Monospace)
-                    .interactive(false),
-            );
+            ui_doc_text_window(ui, &mut text);
         });
 }
 
@@ -718,26 +723,26 @@ fn ui_section_translation(
         return;
     };
 
-    ui.group(|ui| {
-        ui.label(egui::RichText::new("Translation (non-authoritative)").strong().size(18.0));
-        ui.add_space(4.0);
-        ui.label(
-            egui::RichText::new(
-                "WARNING: confirm any translation independently. The authoritative text is the original section text.",
-            )
-            .strong(),
-        );
-        ui.add_space(6.0);
-        ui.label(format!("Language: {}", t.lang));
-        ui.add_space(6.0);
-        let mut text = t.text.clone();
-        ui.add(
-            egui::TextEdit::multiline(&mut text)
-                .desired_rows(14)
-                .font(egui::TextStyle::Monospace)
-                .interactive(false),
-        );
-    });
+    egui::Frame::group(ui.style())
+        .inner_margin(egui::Margin::same(12))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Translation (non-authoritative)")
+                    .strong()
+                    .size(18.0),
+            );
+            ui.add_space(4.0);
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                "Warning: Confirm any translation independently. The authoritative text is the original section text.",
+            );
+            ui.add_space(6.0);
+            ui.label(format!("Language: {}", t.lang));
+            ui.add_space(6.0);
+
+            let mut text = t.text.clone();
+            ui_doc_text_window(ui, &mut text);
+        });
 }
 
 fn ui_section_inputs(
@@ -874,20 +879,74 @@ fn ui_section_inputs(
                             .entry(key.clone())
                             .or_insert_with(|| current_value_json_pretty(wiz, &key));
 
-                        ui.add(egui::TextEdit::multiline(buf).desired_rows(8).code_editor());
+                        if let Some(sample) = spec.sample_json.as_ref() {
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Input JSON");
+                                    let resp = ui.add(
+                                        egui::TextEdit::multiline(buf)
+                                            .desired_rows(8)
+                                            .code_editor(),
+                                    );
 
-                        ui.horizontal(|ui| {
-                            if ui.button("Apply JSON").clicked() {
-                                match dw::set_input_json_from_str_current_doc(wiz, &key, buf) {
-                                    Ok(()) => msg.clear(),
-                                    Err(e) => msg.set_warn(&format!("{e}")),
+                                    if resp.changed() {
+                                        let s = buf.trim();
+                                        if s.is_empty() {
+                                            // Treat empty as "clear"
+                                            if let Err(e) = dw::set_input_value_current_doc(
+                                                wiz,
+                                                &key,
+                                                JsonValue::Null,
+                                            ) {
+                                                msg.set_warn(&format!("{e}"));
+                                            }
+                                        } else {
+                                            match dw::set_input_json_from_str_current_doc(
+                                                wiz, &key, buf,
+                                            ) {
+                                                Ok(()) => msg.clear(),
+                                                Err(e) => msg.set_warn(&format!("{e}")),
+                                            }
+                                        }
+                                    }
+                                });
+
+                                ui.add_space(12.0);
+
+                                ui.vertical(|ui| {
+                                    ui.label("Sample JSON");
+                                    let mut sample_pretty = serde_json::to_string_pretty(sample)
+                                        .unwrap_or_else(|_| sample.to_string());
+
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut sample_pretty)
+                                            .desired_rows(8)
+                                            .code_editor()
+                                            .interactive(false),
+                                    );
+                                });
+                            });
+                        } else {
+                            let resp = ui
+                                .add(egui::TextEdit::multiline(buf).desired_rows(8).code_editor());
+
+                            if resp.changed() {
+                                let s = buf.trim();
+                                if s.is_empty() {
+                                    // Treat empty as "clear"
+                                    if let Err(e) =
+                                        dw::set_input_value_current_doc(wiz, &key, JsonValue::Null)
+                                    {
+                                        msg.set_warn(&format!("{e}"));
+                                    }
+                                } else {
+                                    match dw::set_input_json_from_str_current_doc(wiz, &key, buf) {
+                                        Ok(()) => msg.clear(),
+                                        Err(e) => msg.set_warn(&format!("{e}")),
+                                    }
                                 }
                             }
-
-                            if ui.button("Clear JSON").clicked() {
-                                buf.clear();
-                            }
-                        });
+                        }
                     }
                 }
             });
@@ -897,10 +956,10 @@ fn ui_section_inputs(
 
         ui.separator();
 
-        if ui.button("Validate Current Doc").clicked() {
-            match dw::validate_current_doc_inputs(wiz) {
-                Ok(()) => msg.set_warn("OK"),
-                Err(e) => msg.set_warn(&format!("{e}")),
+        if ui.button("Validate Section").clicked() {
+            match validate_current_section_inputs(wiz, specs) {
+                Ok(()) => msg.set_success("Section validation OK"),
+                Err(e) => msg.set_warn(&e),
             }
         }
     });
