@@ -1,0 +1,31 @@
+{
+  template_id: "sample_bundle_v1",
+  template_desc: "Sample bundle demonstrating sections, translations, and inputs",
+
+  docs: [
+
+    // ================================================================
+    // Document 1: single section, no inputs
+    // ================================================================
+    {
+      doc_identity: {
+        id: "acknowledgement",
+        label: "Acknowledgement",
+        ver: "v1.0"
+      },
+
+      doc_hash: {
+        algo: "sha256",
+        hash: "d700d4f72457a3a100b3001e759e8ae607465203f4ae9d6c32021bc7abd375db"
+      },
+
+      sections: [
+        {
+          section_id: "main",
+          text: "And blood-black nothingness began to spin... Cells interlinked within cells interlinked... Within one stem... And dreadfully distinct... Against the dark, a tall white fountain played..."
+        }
+      ]
+    }
+
+  ]
+}
