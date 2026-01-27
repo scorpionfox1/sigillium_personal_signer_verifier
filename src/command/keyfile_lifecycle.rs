@@ -71,12 +71,7 @@ mod tests {
                 active_key_id: None,
                 active_associated_key_id: None,
             }),
-            secrets: std::sync::Mutex::new(None),
-            keys: std::sync::Mutex::new(Vec::new()),
-            sign_verify_mode: std::sync::Mutex::new(crate::types::SignVerifyMode::Text),
-            security_log: std::sync::Mutex::new(
-                crate::security_log::SecurityLog::init(std::env::temp_dir().as_path()).unwrap(),
-            ),
+            ..AppState::default()
         }
     }
 

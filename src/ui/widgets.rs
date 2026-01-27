@@ -40,15 +40,23 @@ pub fn active_key_selector(
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text(selected_text)
         .show_ui(ui, |ui| {
-            ui.selectable_value(&mut choice, None, "None");
-            ui.separator();
-            for k in metas.iter() {
-                ui.selectable_value(
-                    &mut choice,
-                    Some(k.id),
-                    format!("{} ({})", k.label, k.domain),
-                );
-            }
+            let row_height = ui.spacing().interact_size.y;
+            let max_rows = 5.0;
+
+            egui::ScrollArea::vertical()
+                .max_height(row_height * max_rows)
+                .show(ui, |ui| {
+                    ui.selectable_value(&mut choice, None, "None");
+                    ui.separator();
+
+                    for k in metas.iter() {
+                        ui.selectable_value(
+                            &mut choice,
+                            Some(k.id),
+                            format!("{} ({})", k.label, k.domain),
+                        );
+                    }
+                });
         });
 
     if choice != current_active_id {

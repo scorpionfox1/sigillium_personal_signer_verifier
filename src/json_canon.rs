@@ -75,6 +75,17 @@ fn write_canonical_value<W: Write>(w: &mut W, value: &Value) -> AppResult<()> {
     Ok(())
 }
 
+pub fn canonical_value_string(value: &Value) -> AppResult<String> {
+    let mut out: Vec<u8> = Vec::new();
+    write_canonical_value(&mut out, value)?;
+    String::from_utf8(out).map_err(|_| AppError::JsonCanonicalize("canonical utf-8 failed".into()))
+}
+
+pub fn canonical_value_object_string(value: &Value) -> AppResult<String> {
+    let obj = value.as_object().ok_or(AppError::JsonNotObject)?;
+    canonical_value_string(&Value::Object(obj.clone()))
+}
+
 // ======================================================
 // Unit Tests
 // ======================================================

@@ -138,25 +138,16 @@ pub fn lock_app_inner_if_unlocked(state: &AppState, context: &str) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{security_log::SecurityLog, types::SignVerifyMode};
-    use tempfile::tempdir;
     use zeroize::Zeroizing;
 
     fn mk_state() -> AppState {
-        let td = tempdir().expect("tempdir");
-
         AppState {
             session: std::sync::Mutex::new(SessionState {
                 unlocked: false,
                 active_key_id: None,
                 active_associated_key_id: None,
             }),
-            secrets: std::sync::Mutex::new(None),
-            keys: std::sync::Mutex::new(Vec::new()),
-            sign_verify_mode: std::sync::Mutex::new(SignVerifyMode::Text),
-            security_log: std::sync::Mutex::new(
-                SecurityLog::init(td.path()).expect("security log init"),
-            ),
+            ..AppState::default()
         }
     }
 

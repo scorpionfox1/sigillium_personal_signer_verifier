@@ -74,6 +74,7 @@ pub enum AppError {
     JsonCanonicalize(String),
     SchemaCompile(String),
     SchemaValidation(String),
+    MissingField(String),
 
     // --------------------------------------------------
     // keyfile invariants / parsing (logical, not IO)
@@ -184,6 +185,7 @@ impl AppError {
             JsonCanonicalize(_) => "JSON canonicalization failed.",
             SchemaCompile(_) => "Schema compilation failed.",
             SchemaValidation(_) => "Schema validation failed.",
+            MissingField(_) => "Required field is missing.",
 
             // keyfile logical
             KeyfileMissing => "Keyfile not found.",
@@ -291,6 +293,7 @@ impl fmt::Display for AppError {
             JsonCanonicalize(s) => write!(f, "json canonicalization failed: {s}"),
             SchemaCompile(s) => write!(f, "schema compile failed: {s}"),
             SchemaValidation(s) => write!(f, "schema validation failed: {s}"),
+            MissingField(s) => write!(f, "missing required field: {s}"),
 
             KeyfileMissing => write!(f, "keyfile missing"),
             KeyfileCorrupt => write!(f, "keyfile corrupt"),

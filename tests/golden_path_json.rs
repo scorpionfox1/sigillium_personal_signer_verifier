@@ -84,13 +84,26 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
 
     // Bad schema should reject signing
     assert!(
-        command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(BAD_SCHEMA), &state).is_err(),
+        command::sign_payload(
+            JSON_MSG,
+            SignVerifyMode::Json,
+            Some(BAD_SCHEMA),
+            &state,
+            None
+        )
+        .is_err(),
         "expected schema validation to reject signing"
     );
 
     // Good schema should allow signing
-    let sig2 = command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(GOOD_SCHEMA), &state)
-        .expect("sign key2 with good schema");
+    let sig2 = command::sign_payload(
+        JSON_MSG,
+        SignVerifyMode::Json,
+        Some(GOOD_SCHEMA),
+        &state,
+        None,
+    )
+    .expect("sign key2 with good schema");
 
     // Cross-verify: key1 must fail, key2 must pass
     let ok = command::verify_payload(
@@ -116,8 +129,14 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     // ---- Sign with key 1 under schema ----
     command::select_active_key(key1_id, &state, &ctx).unwrap();
 
-    let sig1 = command::sign_payload(JSON_MSG, SignVerifyMode::Json, Some(GOOD_SCHEMA), &state)
-        .expect("sign key1 with good schema");
+    let sig1 = command::sign_payload(
+        JSON_MSG,
+        SignVerifyMode::Json,
+        Some(GOOD_SCHEMA),
+        &state,
+        None,
+    )
+    .expect("sign key1 with good schema");
 
     let ok = command::verify_payload(
         &pub2_hex,
@@ -140,7 +159,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     assert!(ok);
 
     // ---- No-schema branch: key1 should still sign/verify ----
-    let sig1_ns = command::sign_payload(JSON_MSG, SignVerifyMode::Json, None, &state)
+    let sig1_ns = command::sign_payload(JSON_MSG, SignVerifyMode::Json, None, &state, None)
         .expect("sign key1 without schema");
 
     let ok = command::verify_payload(&pub1_hex, JSON_MSG, &sig1_ns, SignVerifyMode::Json, None)

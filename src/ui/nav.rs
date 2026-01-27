@@ -63,6 +63,7 @@ impl LeftNav {
                                 nav_btn(ui, route, Route::Sign, "Sign");
                                 nav_btn(ui, route, Route::Verify, "Verify");
                                 nav_btn(ui, route, Route::KeyRegistry, "Key Registry");
+                                nav_btn(ui, route, Route::DocumentWizard, "Doc Wizard");
                                 nav_btn(ui, route, Route::Security, "Security");
                             });
                         });

@@ -11,10 +11,11 @@ pub mod keyfile;
 pub mod keyfile_store;
 pub mod platform;
 pub mod security_log;
+pub mod template;
 pub mod types;
 
 use crate::security_log::SecurityLog;
-use crate::types::{AppState, SessionState, SignVerifyMode};
+use crate::types::{AppState, SessionState, SignOutputMode, SignVerifyMode};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -34,6 +35,7 @@ pub fn init_state(app_data_dir: &Path) -> Result<AppState, String> {
 
         keys: Mutex::new(Vec::new()),
         sign_verify_mode: Mutex::new(SignVerifyMode::Text),
+        sign_output_mode: Mutex::new(SignOutputMode::Signature),
 
         security_log: Mutex::new(security_log),
     })

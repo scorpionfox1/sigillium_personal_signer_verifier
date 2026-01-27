@@ -6,6 +6,7 @@
 mod ui;
 
 use directories::ProjectDirs;
+use eframe::egui;
 use sigillium_personal_signer_verifier_lib::context::{AppCtx, APP_ID, APP_ORG, APP_QUALIFIER};
 use sigillium_personal_signer_verifier_lib::fs_hardening;
 use std::env;
@@ -36,9 +37,19 @@ fn main() -> eframe::Result<()> {
 
     fs_hardening::startup_hardening_best_effort(state.as_ref(), ctx.as_ref());
 
+    // --- icon wiring (Linux) ---
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon_512.png"))
+        .expect("invalid icon png");
+
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_icon(icon),
+        ..Default::default()
+    };
+    // ---------------------------
+
     eframe::run_native(
         "Sigillium Personal Signer / Verifier",
-        eframe::NativeOptions::default(),
+        native_options,
         Box::new(move |_cc| Ok(Box::new(ui::UiApp::new(state.clone(), ctx.clone())))),
     )
 }
