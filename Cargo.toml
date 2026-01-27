@@ -2,7 +2,7 @@
 
 [package]
 name = "sigillium_personal_signer_verifier"
-version = "0.5.0"
+version = "0.5.1"
 description = "An app to store multiple ed25519 keys and sign with them and to verify signitures."
 authors = ["paul carlona"]
 edition = "2021"
