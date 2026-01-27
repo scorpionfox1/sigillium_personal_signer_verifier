@@ -186,7 +186,7 @@ r#"{
                     });
                 });
 
-                ui.add_space(10.0);
+                ui.add_space(2.0);
 
                 let has_active = current_active_id.is_some();
                 let can_sign = has_active && !self.message.trim().is_empty();
@@ -264,15 +264,13 @@ r#"{
                         self.reset_inputs();
                         self.clear_messages();
                     }
-
-                    if !has_active {
-                        ui.weak("Select an active key in Key Registry to sign.");
-                    }
                 });
 
                 self.msg.show(ui, false);
 
+                ui.add_space(8.0);
                 ui.separator();
+
 
                 let left_label = if output_mode == SignOutputMode::Signature {
                     "Signature (base64)"
