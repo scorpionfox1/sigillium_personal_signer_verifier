@@ -22,6 +22,7 @@
       sections: [
         {
           section_id: "main",
+          title: "Baseline",
           text: "And blood-black nothingness began to spin... Cells interlinked within cells interlinked... Within one stem... And dreadfully distinct... Against the dark, a tall white fountain played..."
         }
       ]
@@ -39,113 +40,80 @@
 
       doc_hash: {
         algo: "sha256",
-        hash: "428e8319ddb2eb0a6c146be0e67754d135f4a015601e5eb36b25a28fba79438c"
+        hash: "d6b838db27498cf7b47c5a390fa8b4127a4cb5c3f635e0ed5d59f32054eb2d96"
       },
 
       sections: [
         {
-          section_id: "section_1",
-          title: "Prima Pars",
+          section_id: "nicene_creed",
+          title: "SYMBOLVM NICÆNVM",
 
-          text: "Credo in unum Deum.",
+          text: "CREDO IN VNVM DEVM, \n\
+\n\
+PATREM OMNIPOTENTEM, FACTOREM CÆLI ET TERRÆ, VISIBILIVM OMNIVM ET INVISIBILIVM. \n\
+\n\
+ET IN VNVM DOMINVM IESVM CHRISTVM, FILIVM DEI VNIGENITVM, ET EX PATRE NATVM ANTE OMNIA SÆCVLA. DEVM DE DEO, LVMEN DE LVMINE, DEVM VERVM DE DEO VERO. GENITVM, NON FACTVM, CONSVBSTANTIALEM PATRI, PER QVEM OMNIA FACTA SVNT. QVI PROPTER NOS HOMINES ET PROPTER NOSTRAM SALVTEM DESCENDIT DE CÆLIS, ET INCARNATVS EST DE SPIRITV SANCTO EX MARIA VIRGINE, ET HOMO FACTVS EST. CRVCIFIXVS ETIAM PRO NOBIS SVB PONTIO PILATO, PASSVS ET SEPVLTVS EST, ET RESVRREXIT TERTIA DIE SECVNDVM SCRIPTURAS, ET ASCENDIT IN CÆLVM, SEDET AD DEXTERAM PATRIS. ET ITERVM VENTVRVS EST CVM GLORIA IVDICARE VIVOS ET MORTVOS, CVIVS REGNI NON ERIT FINIS. \n\
+\n\
+ET IN SPIRITVM SANCTVM, DOMINVM ET VIVIFICANTEM, QVI EX PATRE PROCEDIT, QVI CVM PATRE ET FILIO SIMVL ADORATVR ET CONGLORIFICATVR, QVI LOCVTVS EST PER PROPHETAS. \n\
+\n\
+ET VNAM, SANCTAM, CATHOLICAM ET APOSTOLICAM ECCLESIAM. CONFITEOR VNVM BAPTISMA IN REMISSIONEM PECCATORVM. ET EXPECTO RESVRRECTIONEM MORTVORVM, ET VITAM VENTVRI SÆCVLI. \n\
+\n\
+AMEN.",
 
           translation: {
             lang: "en",
-            text: "I believe in one God."
+            text: "The Nicene Creed:\n\
+\n\
+I believe in one God,\n\
+the Father almighty,\n\
+maker of heaven and earth,\n\
+of all things visible and invisible.\n\
+\n\
+And in one Lord Jesus Christ,\n\
+the only-begotten Son of God,\n\
+born of the Father before all ages.\n\
+God from God, Light from Light,\n\
+true God from true God.\n\
+Begotten, not made, consubstantial with the Father;\n\
+through him all things were made.\n\
+For us men and for our salvation\n\
+he came down from heaven,\n\
+and by the Holy Spirit was incarnate of the Virgin Mary,\n\
+and became man.\n\
+For our sake he was crucified under Pontius Pilate,\n\
+he suffered and was buried,\n\
+and rose again on the third day\n\
+in accordance with the Scriptures.\n\
+He ascended into heaven\n\
+and is seated at the right hand of the Father.\n\
+He will come again in glory\n\
+to judge the living and the dead,\n\
+and his kingdom will have no end.\n\
+\n\
+And in the Holy Spirit,\n\
+the Lord, the giver of life,\n\
+who proceeds from the Father,\n\
+who with the Father and the Son\n\
+is adored and glorified,\n\
+who has spoken through the prophets.\n\
+\n\
+And one, holy, catholic, and apostolic Church.\n\
+I confess one baptism for the forgiveness of sins.\n\
+And I look forward to the resurrection of the dead\n\
+and the life of the world to come. \n\
+\n\
+Amen."
           },
 
           inputs_spec: [
             {
-              key: "ack_read_section_1",
+              key: "ack_read_nicene_creed",
               label: "I acknowledge I have read this section",
               type: "bool",
               required: true
             }
           ],
         },
-
-        {
-          section_id: "section_2",
-          title: "Secunda Pars",
-
-          text: "Et in unum Dominum Iesum Christum.",
-
-          translation: {
-            lang: "en",
-            text: "And in one Lord Jesus Christ."
-          },
-
-          inputs_spec: [
-            {
-              key: "ack_read_section_2",
-              label: "I acknowledge I have read this section",
-              type: "bool",
-              required: true
-            }
-          ],
-        },
-		{
-		  section_id: "section_3",
-		  title: "Tertia Pars",
-		  
-		  text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",
-		  
-		  translation: {
-			lang: "en",
-			text: "May the pain be love the ain itself, seek it out ant to having, but do time of somekin happepen so that through labour and pain some great things. So that I come to smallest, who af us exercis someco of labour if not anp convenoence follo from it. Bu dho will rgightfully in blame pain in pleasure may want to be cwhom in pain hi may flee nothing will come out of it. May wheo wille withdraw be make blind not ee in advance, those are to blame who give up their duties make the min soft that is of the labours."
-		  },
-
-		  inputs_spec: [
-		    {
-		      key: "ack_read_section_3",
-		      label: "I acknowledge I have read this section",
-		      type: "bool",
-		      required: true
-		    }
-		  ],
-		},
-
-        {
-          section_id: "section_4",
-          title: "Quartia Pars",
-
-          text: "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?",
-
-          translation: {
-            lang: "en",
-            text: "But I must explain to you how all this mistaken idea of denouncing pleasure and praising pain was born and I will give you a complete account of the system, and expound the actual teachings of the great explorer of the truth, the master-builder of human happiness. No one rejects, dislikes, or avoids pleasure itself, because it is pleasure, but because those who do not know how to pursue pleasure rationally encounter consequences that are extremely painful. Nor again is there anyone who loves or pursues or desires to obtain pain of itself, because it is pain, but because occasionally circumstances occur in which toil and pain can procure him some great pleasure. To take a trivial example, which of us ever undertakes laborious physical exercise, except to obtain some advantage from it? But who has any right to find fault with a man who chooses to enjoy a pleasure that has no annoying consequences, or one who avoids a pain that produces no resultant pleasure?"
-          },
-
-          inputs_spec: [
-            {
-              key: "ack_read_section_4",
-              label: "I acknowledge I have read this section",
-              type: "bool",
-              required: true
-            }
-          ],
-        },
-
-        {
-          section_id: "section_5",
-          title: "Quintia Pars",
-
-          text: "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.",
-
-          translation: {
-            lang: "en",
-            text: "On the other hand, we denounce with righteous indignation and dislike men who are so beguiled and demoralized by the charms of pleasure of the moment, so blinded by desire, that they cannot foresee the pain and trouble that are bound to ensue; and equal blame belongs to those who fail in their duty through weakness of will, which is the same as saying through shrinking from toil and pain. These cases are perfectly simple and easy to distinguish. In a free hour, when our power of choice is untrammelled and when nothing prevents our being able to do what we like best, every pleasure is to be welcomed and every pain avoided. But in certain circumstances and owing to the claims of duty or the obligations of business it will frequently occur that pleasures have to be repudiated and annoyances accepted. The wise man therefore always holds in these matters to this principle of selection: he rejects pleasures to secure other greater pleasures, or else he endures pains to avoid worse pains."
-          },
-
-          inputs_spec: [
-            {
-              key: "ack_read_section_5",
-              label: "I acknowledge I have read this section",
-              type: "bool",
-              required: true
-            }
-          ],
-        }
       ]
     },
 
