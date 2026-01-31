@@ -137,18 +137,16 @@ pub fn lock_app_inner_if_unlocked(state: &AppState, context: &str) -> Result<(),
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use zeroize::Zeroizing;
 
     fn mk_state() -> AppState {
-        AppState {
-            session: std::sync::Mutex::new(SessionState {
-                unlocked: false,
-                active_key_id: None,
-                active_associated_key_id: None,
-            }),
-            ..AppState::default()
-        }
+        let dir: PathBuf =
+            std::env::temp_dir().join(format!("sigillium_test_state_{}", std::process::id()));
+
+        crate::init_state(&dir).expect("init_state")
     }
 
     fn unlock_with_master(state: &AppState, mk: [u8; 32]) {

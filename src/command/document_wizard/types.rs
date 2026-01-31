@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Wizard output: a JSON message to be signed (tags intentionally preserved).
 ///
 /// {
-///   "signed_utc": "{{signed_utc}}",
-///   "canonical_id": "{{assoc_key_id}}",
+///   "signed_utc": "{{~signed_utc}}",
+///   "canonical_id": "{{~assoc_key_id}}",
 ///   "docs": [
 ///      {
 ///        "doc_identity": { "id":  "label":  "ver": "v1.0" },
@@ -18,8 +18,6 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 ///   ]
 /// }
-pub const BUNDLE_TAG_SIGNED_UTC: &str = "{{signed_utc}}";
-pub const BUNDLE_TAG_ASSOC_KEY_ID: &str = "{{assoc_key_id}}";
 
 #[derive(Debug, Clone)]
 pub struct WizardState {

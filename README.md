@@ -111,6 +111,14 @@ In JSON signing mode, the payload is embedded as structured JSON (not as a JSON-
 
 The signing panel also provides a shortcut action that allows the user to immediately navigate to the verification panel after signing, carrying the signed message and produced signature forward automatically. This enables quick confirmation that the signature produced is valid without manual copying or reconfiguration.
 
+### Message tag resolution
+
+The signing panel supports optional message tag resolution at signing time.
+
+When enabled, predefined template tags (for example `{{~assoc_key_id}}` or `{{~signed_utc}}`) are resolved immediately before signing, and the message text is rewritten prior to signature generation. This guarantees that the visible message content exactly matches the signed payload.
+
+Tag resolution is a preparatory transformation step and does not alter signature semantics or verification behavior.
+
 ### JSON Schema validation
 
 When signing in JSON mode:
@@ -135,6 +143,8 @@ The wizard:
 - renders human-readable document text,
 - gathers and validates user input, and
 - emits a JSON payload intended to be signed by the core signing engine.
+- emitted JSON payload contains signing-time tags, which are resolved by the signing panel
+
 
 The resulting bundle separates:
 - document identity and expected document hash (from the template), and

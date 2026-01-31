@@ -140,8 +140,8 @@ The wizard produces:
 
 ```json
 {
-  "signed_utc": "{{signed_utc}}",
-  "canonical_id": "{{assoc_key_id}}",
+  "signed_utc": "{{~signed_utc}}",
+  "canonical_id": "{{~assoc_key_id}}",
   "docs": [
     {
       "doc_identity": { "id": "...", "label": "...", "ver": "..." },

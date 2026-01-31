@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::{
     crypto,
     error::{AppError, AppResult},
-    types::{AppState, SignOutputMode, SignVerifyMode},
+    types::{AppState, SignOutputMode, SignVerifyMode, TAG_ASSOC_KEY_ID, TAG_SIGNED_UTC},
 };
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
@@ -167,8 +167,8 @@ pub fn verify_payload(
 
 pub fn replace_tags(payload: &str, assoc_key_id: &str) -> String {
     let mut replacements = HashMap::new();
-    replacements.insert("{{assoc_key_id}}".to_string(), assoc_key_id.to_string());
-    replacements.insert("{{signed_utc}}".to_string(), Utc::now().to_rfc3339());
+    replacements.insert(TAG_ASSOC_KEY_ID.to_string(), assoc_key_id.to_string());
+    replacements.insert(TAG_SIGNED_UTC.to_string(), Utc::now().to_rfc3339());
 
     let mut result = payload.to_string();
     for (tag, value) in replacements {
@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn test_replace_tags() {
         let original_payload =
-            "The key id is {{assoc_key_id}} and the timestamp is {{signed_utc}}.";
+            "The key id is {{~assoc_key_id}} and the timestamp is {{~signed_utc}}.";
         let assoc_key_id = "test_key_id";
 
         let result = replace_tags(original_payload, assoc_key_id);

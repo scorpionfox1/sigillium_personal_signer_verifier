@@ -5,15 +5,14 @@ use crate::template::doc_wizard::{DocTemplate, HashAlgo, InputSpec};
 use crate::template::doc_wizard_verify::{
     canonical_doc_text_from_sections, extract_input_tags, sha256_hex_of_text, validate_tag_coverage,
 };
+use crate::types::{TAG_ASSOC_KEY_ID, TAG_SIGNED_UTC};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 use super::nav::current_doc_mut;
-use super::types::{
-    DocRunState, WizardError, WizardState, BUNDLE_TAG_ASSOC_KEY_ID, BUNDLE_TAG_SIGNED_UTC,
-};
+use super::types::{DocRunState, WizardError, WizardState};
 
 pub fn load_wizard_from_path(path: impl AsRef<Path>) -> Result<WizardState, WizardError> {
     let s = fs::read_to_string(path)?;
@@ -226,11 +225,11 @@ pub fn build_json_bundle(state: &WizardState) -> Result<JsonValue, WizardError> 
     let mut bundle = JsonMap::new();
     bundle.insert(
         "signed_utc".to_string(),
-        JsonValue::String(BUNDLE_TAG_SIGNED_UTC.to_string()),
+        JsonValue::String(TAG_SIGNED_UTC.to_string()),
     );
     bundle.insert(
         "canonical_id".to_string(),
-        JsonValue::String(BUNDLE_TAG_ASSOC_KEY_ID.to_string()),
+        JsonValue::String(TAG_ASSOC_KEY_ID.to_string()),
     );
     bundle.insert("docs".to_string(), JsonValue::Array(docs_json));
 

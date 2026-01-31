@@ -2,10 +2,11 @@
 
 [package]
 name = "sigillium_personal_signer_verifier"
-version = "0.5.1"
+version = "0.6.0"
 description = "An app to store multiple ed25519 keys and sign with them and to verify signitures."
 authors = ["paul carlona"]
 edition = "2021"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -56,3 +57,6 @@ tempfile = "3"
 [[bin]]
 name = "sigillium-psv"
 path = "src/main.rs"
+
+[build-dependencies]
+winres = "0.1.12"

@@ -216,20 +216,35 @@ fn validate_standard_domain_ascii(raw: &str) -> AppResult<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use super::*;
     use crate::context::AppCtx;
     use crate::types::{AppState, SessionState};
     use tempfile::tempdir;
 
+    static TEST_STATE_SEQ: AtomicUsize = AtomicUsize::new(0);
+
     fn mk_state_locked() -> AppState {
-        AppState {
-            session: std::sync::Mutex::new(SessionState {
-                unlocked: false,
-                active_key_id: None,
-                active_associated_key_id: None,
-            }),
-            ..AppState::default()
-        }
+        let n = TEST_STATE_SEQ.fetch_add(1, Ordering::Relaxed);
+
+        let dir: PathBuf = std::env::temp_dir().join(format!(
+            "sigillium_test_state_locked_{}_{}",
+            std::process::id(),
+            n
+        ));
+
+        let state = crate::init_state(&dir).expect("init_state");
+
+        // Explicitly set what "locked" means (even if it's already default)
+        *state.session.lock().unwrap() = SessionState {
+            unlocked: false,
+            active_key_id: None,
+            active_associated_key_id: None,
+        };
+
+        state
     }
 
     // --------------------------------------------------

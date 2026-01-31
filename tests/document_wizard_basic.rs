@@ -3,11 +3,12 @@
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
     advance_doc, build_json_bundle, load_wizard_from_str, set_input_json_from_str_current_doc,
-    set_input_value_current_doc, BUNDLE_TAG_ASSOC_KEY_ID, BUNDLE_TAG_SIGNED_UTC,
+    set_input_value_current_doc,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::{
     canonical_doc_text_from_sections, sha256_hex_of_text,
 };
+use sigillium_personal_signer_verifier_lib::types::{TAG_ASSOC_KEY_ID, TAG_SIGNED_UTC};
 
 fn sample_template_json5() -> String {
     // Doc 1
@@ -203,14 +204,8 @@ fn document_wizard_basic_flow_builds_bundle() {
     let bundle = build_json_bundle(&w).expect("build bundle");
 
     // Basic shape assertions
-    assert_eq!(
-        bundle["signed_utc"].as_str().unwrap(),
-        BUNDLE_TAG_SIGNED_UTC
-    );
-    assert_eq!(
-        bundle["canonical_id"].as_str().unwrap(),
-        BUNDLE_TAG_ASSOC_KEY_ID
-    );
+    assert_eq!(bundle["signed_utc"].as_str().unwrap(), TAG_SIGNED_UTC);
+    assert_eq!(bundle["canonical_id"].as_str().unwrap(), TAG_ASSOC_KEY_ID);
 
     let docs = bundle["docs"].as_array().expect("docs array");
     assert_eq!(docs.len(), 3);

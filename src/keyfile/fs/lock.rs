@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
-pub(crate) const LOCK_STALE_AFTER: Duration = Duration::from_secs(180);
+pub(crate) const LOCK_STALE_AFTER: Duration = Duration::from_secs(300); // 5 minutes
 
 pub(crate) struct KeyfileLock {
     lock_path: PathBuf,

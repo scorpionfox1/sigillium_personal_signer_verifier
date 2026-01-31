@@ -151,6 +151,35 @@ impl SignPanel {
                     *g = output_mode;
                 }
 
+                ui.add_space(6.0);
+
+                // ---- Resolve tags mode (True / False)
+                let mut resolve_tags_mode = state
+                    .sign_resolve_tag_mode
+                    .lock()
+                    .map(|m| *m)
+                    .unwrap_or(true);
+
+                ui.horizontal(|ui| {
+                    ui.label("Resolve tags mode:");
+                    if ui
+                        .selectable_label(resolve_tags_mode == true, "True")
+                        .clicked()
+                    {
+                        resolve_tags_mode = true;
+                    }
+                    if ui
+                        .selectable_label(resolve_tags_mode == false, "False")
+                        .clicked()
+                    {
+                        resolve_tags_mode = false;
+                    }
+                });
+
+                if let Ok(mut g) = state.sign_resolve_tag_mode.lock() {
+                    *g = resolve_tags_mode;
+                }
+
                 ui.add_space(10.0);
 
                 // ---- Message (left) + Schema/Config (right)
@@ -214,6 +243,14 @@ r#"{
                     {
                         self.clear_messages();
 
+                        if resolve_tags_mode {
+                            let before = self.message.clone();
+                            let after = command::sign_verify::replace_tags(before.as_str(), active_assoc_id.as_str());
+                            if after != before {
+                                self.message = after;
+                            }
+                        }
+
                         let schema_opt = if sign_mode == SignVerifyMode::Json {
                             let s = self.schema.trim();
                             if s.is_empty() {
@@ -256,23 +293,6 @@ r#"{
                                 self.msg.from_app_error(&e, ctx.debug_ui);
                                 self.output_text.clear();
                             }
-                        }
-                    }
-
-                    if ui
-                        .add_enabled(!self.message.trim().is_empty(), egui::Button::new("Replace message tags"))
-                        .clicked()
-                    {
-                        self.clear_messages();
-
-                        let before = self.message.clone();
-                        let after = command::sign_verify::replace_tags(before.as_str(), active_assoc_id.as_str());
-
-                        if after == before {
-                            self.msg.set_info("No tags found.");
-                        } else {
-                            self.message = after;
-                            self.msg.set_success("Tags replaced.");
                         }
                     }
 

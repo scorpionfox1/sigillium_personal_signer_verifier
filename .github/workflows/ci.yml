@@ -5,9 +5,19 @@ on:
     branches: [main]
     paths-ignore:
       - ".github/workflows/**"
+      - "docs/**"
+      - ".vscode/**"
+      - "get_key.py"
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target_os:
+        description: "Which OS to build"
+        required: true
+        type: choice
+        default: all
+        options: [all, windows, linux, mac]
 
 jobs:
   build:
@@ -16,8 +26,12 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            key: linux
           - os: windows-latest
+            key: windows
           - os: macos-15
+            key: mac
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -25,20 +39,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build (release)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target_os == 'all' || inputs.target_os == matrix.key }}
         run: cargo build --release
 
       - name: Test
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target_os == 'all' || inputs.target_os == matrix.key }}
         run: cargo test
 
       - name: Upload artifact (non-Windows)
-        if: runner.os != 'Windows'
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.target_os == 'all' || inputs.target_os == matrix.key) && runner.os != 'Windows' }}
         uses: actions/upload-artifact@v4
         with:
           name: sigillium-${{ runner.os }}
           path: target/release/sigillium-psv
 
       - name: Upload artifact (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.target_os == 'all' || inputs.target_os == matrix.key) && runner.os == 'Windows' }}
         uses: actions/upload-artifact@v4
         with:
           name: sigillium-${{ runner.os }}

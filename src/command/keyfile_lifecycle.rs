@@ -60,19 +60,17 @@ pub fn quarantine_keyfile_now(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::context::{AppCtx, KEYFILE_NAME};
-    use crate::types::{AppState, SecretsState, SessionState};
+    use crate::types::{AppState, SecretsState};
     use tempfile::tempdir;
     use zeroize::Zeroizing;
 
+    use std::path::PathBuf;
+
     fn mk_state() -> AppState {
-        AppState {
-            session: std::sync::Mutex::new(SessionState {
-                unlocked: false,
-                active_key_id: None,
-                active_associated_key_id: None,
-            }),
-            ..AppState::default()
-        }
+        let dir: PathBuf =
+            std::env::temp_dir().join(format!("sigillium_test_state_{}", std::process::id()));
+
+        crate::init_state(&dir).expect("init_state")
     }
 
     fn unlock_state(state: &AppState) {
