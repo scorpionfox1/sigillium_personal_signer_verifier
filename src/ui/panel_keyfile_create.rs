@@ -98,7 +98,7 @@ impl CreateKeyfilePanel {
             let dir = match store.create_keyfile_dir(name) {
                 Ok(d) => d,
                 Err(e) => {
-                    self.msg.from_app_error(&e, ctx.debug_ui);
+                    self.msg.from_app_error(&e);
                     return;
                 }
             };
@@ -122,7 +122,7 @@ impl CreateKeyfilePanel {
                             "A keyfile with that name already exists. Choose a different name.",
                         );
                     } else {
-                        self.msg.from_app_error(&e, ctx.debug_ui);
+                        self.msg.from_app_error(&e);
                     }
                 }
             }
@@ -132,6 +132,6 @@ impl CreateKeyfilePanel {
             self.keyfile_name.clear();
         }
 
-        self.msg.show(ui, false);
+        self.msg.show(ui);
     }
 }

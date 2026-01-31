@@ -212,7 +212,6 @@ impl UiApp {
 impl eframe::App for UiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let rctx = self.derive_route_ctx();
-        let debug_ui = cfg!(debug_assertions);
 
         let had_activity = ctx.input(|i| {
             i.raw.events.iter().any(|e| {
@@ -325,7 +324,7 @@ impl eframe::App for UiApp {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.best_effort_warn.show(ui, debug_ui);
+            self.best_effort_warn.show(ui);
 
             match self.route {
                 Route::KeyfileSelect => self.keyfile_select.ui(

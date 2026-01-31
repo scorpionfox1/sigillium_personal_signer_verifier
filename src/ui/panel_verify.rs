@@ -62,7 +62,7 @@ impl VerifyPanel {
                         *route = Route::KeyfileSelect;
                         return;
                     }
-                    self.msg.from_app_error(&e, ctx.debug_ui);
+                    self.msg.from_app_error(&e);
                 }
 
                 let current_active_id: Option<KeyId> =
@@ -222,7 +222,7 @@ impl VerifyPanel {
                                     *route = Route::KeyfileSelect;
                                     return;
                                 }
-                                self.msg.from_app_error(&e, ctx.debug_ui)
+                                self.msg.from_app_error(&e)
                             }
                         }
                     }
@@ -235,7 +235,7 @@ impl VerifyPanel {
                     }
                 });
 
-                self.msg.show(ui, false);
+                self.msg.show(ui);
             });
     }
 }

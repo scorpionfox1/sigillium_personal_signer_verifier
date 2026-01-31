@@ -191,7 +191,7 @@ impl KeyfileSelectPanel {
                     }
 
                     ui.add_space(8.0);
-                    self.msg.show(ui, false);
+                    self.msg.show(ui);
                 });
             });
         });

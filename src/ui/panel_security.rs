@@ -186,12 +186,12 @@ impl SecurityPanel {
                         self.reset_inputs();
                         self.msg.set_success("Passphrase changed successfully.");
                     }
-                    Err(e) => self.msg.from_app_error(&e, ctx.debug_ui),
+                    Err(e) => self.msg.from_app_error(&e),
                 }
             }
         });
 
-        self.msg.show(ui, false);
+        self.msg.show(ui);
     }
 
     fn ui_self_destruct(&mut self, ui: &mut egui::Ui, ctx: &AppCtx, route: &mut Route) {
@@ -276,7 +276,7 @@ impl SecurityPanel {
                 });
         }
 
-        self.msg.show(ui, false);
+        self.msg.show(ui);
     }
 }
 

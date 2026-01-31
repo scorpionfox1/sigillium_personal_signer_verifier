@@ -88,16 +88,12 @@ impl DocumentWizardPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        let debug_ui = cfg!(debug_assertions);
-
         ui.heading("Document Wizard");
         ui.add_space(6.0);
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                self.msg.show(ui, debug_ui);
-
                 self.ui_template_picker(ui);
 
                 let Some(wiz) = self.wizard.as_mut() else {

@@ -1,3 +1,30 @@
+---
+
+## Release v0.6.1
+
+### Notes
+
+This release completes a long-planned cleanup of the UI error-handling model.
+
+---
+
+## Notable Changes
+
+### Debug UI semantics removed
+
+- The legacy **debug UI mode** has been fully retired from error handling.
+- Error reporting no longer branches on a debug / non-debug distinction.
+- All application errors now surface with the same level of detail previously shown only when debug mode was enabled.
+
+This change resolves a long-standing issue where meaningful, user-actionable errors (such as passphrase validation failures) could be collapsed into generic messages like *“Operation failed.”*
+
+Error reporting is now:
+- deterministic,
+- consistent across all panels, and
+- informative by default.
+
+---
+
 ## Release v0.6.0
 
 ### Notes

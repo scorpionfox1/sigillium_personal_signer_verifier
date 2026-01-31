@@ -48,7 +48,7 @@ impl LockPanel {
 
         if unlocked {
             ui.label("App is unlocked.");
-            self.msg.show(ui, false);
+            self.msg.show(ui);
             return;
         }
 
@@ -89,13 +89,13 @@ impl LockPanel {
                 }
 
                 Err(e) => {
-                    self.msg.from_app_error(&e, ctx.debug_ui);
+                    self.msg.from_app_error(&e);
                 }
             }
 
             self.passphrase.clear();
         }
 
-        self.msg.show(ui, false);
+        self.msg.show(ui);
     }
 }

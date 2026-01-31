@@ -90,7 +90,7 @@ impl KeyRegistryPanel {
                             *route = Route::KeyfileSelect;
                             return;
                         }
-                        self.msg.from_app_error(&e, ctx.debug_ui);
+                        self.msg.from_app_error(&e);
                     }
 
                     ui.add_space(6.0);
@@ -254,7 +254,7 @@ impl KeyRegistryPanel {
                                             *route = Route::KeyfileSelect;
                                             return;
                                         }
-                                        self.msg.from_app_error(&e, ctx.debug_ui)
+                                        self.msg.from_app_error(&e)
                                     }
                                 }
                             }
@@ -284,7 +284,7 @@ impl KeyRegistryPanel {
                     });
                 });
 
-                self.msg.show(ui, cfg!(debug_assertions));
+                self.msg.show(ui);
 
                 ui.add_space(10.0);
 
@@ -341,7 +341,7 @@ impl KeyRegistryPanel {
                                                 *route = Route::KeyfileSelect;
                                                 return;
                                             }
-                                            self.msg.from_app_error(&e, ctx.debug_ui)
+                                            self.msg.from_app_error(&e)
                                         }
                                     }
                                 }

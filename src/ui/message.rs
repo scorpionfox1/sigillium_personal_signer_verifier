@@ -47,30 +47,32 @@ impl PanelMsgState {
         self.detail = None;
     }
 
-    pub fn from_app_error(&mut self, err: &AppError, debug_ui: bool) {
-        let msg = if debug_ui {
-            err.to_string()
-        } else {
-            err.user_msg().short.to_string()
-        };
+    pub fn from_app_error(&mut self, err: &AppError) {
+        self.detail = Some(err.to_string());
 
-        self.set_error(msg);
+        match err {
+            AppError::Msg(s) => {
+                self.kind = Some(UserMsgKind::Error);
+                self.short = Some(s.clone());
+            }
+            _ => {
+                let um = err.user_msg();
+                self.kind = Some(um.kind);
+                self.short = Some(um.short.to_string());
+            }
+        }
     }
 
-    pub fn show(&self, ui: &mut Ui, debug_ui: bool) {
+    pub fn show(&self, ui: &mut Ui) {
         if !self.is_set() {
             return;
         }
 
         let kind = self.kind.unwrap();
         let short = self.short.as_deref().unwrap_or("");
-        let detail = self.detail.as_deref();
+        let _detail = self.detail.as_deref();
 
-        let text = if debug_ui {
-            detail.unwrap_or(short)
-        } else {
-            short
-        };
+        let text = short;
 
         let (stroke, fill) = match kind {
             UserMsgKind::Success => (

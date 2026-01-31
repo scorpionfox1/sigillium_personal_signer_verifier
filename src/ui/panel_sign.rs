@@ -71,7 +71,7 @@ impl SignPanel {
                 *route = Route::KeyfileSelect;
                 return;
             }
-            self.msg.from_app_error(&e, ctx.debug_ui);
+            self.msg.from_app_error(&e);
         }
         ui.add_space(10.0);
 
@@ -290,7 +290,7 @@ r#"{
                                     self.output_text.clear();
                                     return;
                                 }
-                                self.msg.from_app_error(&e, ctx.debug_ui);
+                                self.msg.from_app_error(&e);
                                 self.output_text.clear();
                             }
                         }
@@ -338,7 +338,7 @@ r#"{
 
                 });
 
-                self.msg.show(ui, false);
+                self.msg.show(ui);
 
                 ui.add_space(8.0);
                 ui.separator();
