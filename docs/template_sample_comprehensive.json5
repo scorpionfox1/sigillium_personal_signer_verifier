@@ -173,7 +173,7 @@ Amen."
 
             {
               key: "birth_date",
-              label: "Date of Birth",
+              label: "Date of Birth YYYY-MM-DD",
               type: "date",
               required: true
               // Expected format: YYYY-MM-DD
