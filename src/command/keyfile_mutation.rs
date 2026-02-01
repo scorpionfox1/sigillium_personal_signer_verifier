@@ -138,8 +138,8 @@ pub fn change_passphrase(
     let old_passphrase = Zeroizing::new(old_passphrase.to_owned());
     let new_passphrase = Zeroizing::new(new_passphrase.to_owned());
 
-    super::validate_passphrase_for_unlock(&old_passphrase).map_err(AppError::Msg)?;
-    super::validate_passphrase(&new_passphrase).map_err(AppError::Msg)?;
+    super::validate_passphrase_for_unlock(&old_passphrase)?;
+    super::validate_passphrase(&new_passphrase)?;
 
     let keyfile_path = ctx
         .current_keyfile_path()

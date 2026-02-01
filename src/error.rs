@@ -126,6 +126,13 @@ pub enum AppError {
     KeyfilePermsEnforceFailed,
     KeyfilePermsInsufficient,
     PlatformHardeningFailed,
+
+    // --------------------------------------------------
+    // passphrase validation
+    // --------------------------------------------------
+    PassphraseRequired,
+    PassphraseTooShort { min: usize },
+    PassphraseTooLong { max: usize },
 }
 
 impl AppError {
@@ -227,6 +234,20 @@ impl AppError {
             PlatformHardeningFailed => {
                 kind = UserMsgKind::Warn;
                 "Some security hardening steps failed."
+            }
+
+            // passphrase validation
+            PassphraseRequired => {
+                kind = UserMsgKind::Info;
+                "Passphrase required."
+            }
+            PassphraseTooShort { .. } => {
+                kind = UserMsgKind::Info;
+                "Passphrase too short."
+            }
+            PassphraseTooLong { .. } => {
+                kind = UserMsgKind::Info;
+                "Passphrase too long."
             }
         };
 
@@ -333,6 +354,10 @@ impl fmt::Display for AppError {
             KeyfilePermsEnforceFailed => write!(f, "failed to enforce keyfile permissions"),
             KeyfilePermsInsufficient => write!(f, "insufficient keyfile permissions"),
             PlatformHardeningFailed => write!(f, "platform hardening failure"),
+
+            PassphraseRequired => write!(f, "passphrase required"),
+            PassphraseTooShort { min } => write!(f, "passphrase too short (min {min})"),
+            PassphraseTooLong { max } => write!(f, "passphrase too long (max {max})"),
         }
     }
 }

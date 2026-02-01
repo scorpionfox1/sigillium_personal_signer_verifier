@@ -21,12 +21,23 @@ pub use sign_verify::{sign_payload, verify_payload};
 
 // --- Shared helpers (kept private to the command module) ---
 
-pub(super) fn validate_passphrase(pass: &str) -> Result<(), String> {
-    if pass.len() < 15 {
-        Err("Passphrase too short".to_string())
-    } else {
-        Ok(())
+pub(super) fn validate_passphrase(pass: &str) -> AppResult<()> {
+    if pass.trim().is_empty() {
+        return Err(AppError::PassphraseRequired);
     }
+
+    const MIN_LEN: usize = 15;
+    if pass.len() < MIN_LEN {
+        return Err(AppError::PassphraseTooShort { min: MIN_LEN });
+    }
+
+    // Prevent ridiculous inputs / DoS-y KDF cost.
+    const MAX_LEN: usize = 4096;
+    if pass.len() > MAX_LEN {
+        return Err(AppError::PassphraseTooLong { max: MAX_LEN });
+    }
+
+    Ok(())
 }
 
 pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
@@ -49,15 +60,15 @@ pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResul
 }
 
 // Unlock-time sanity checks (NOT strength policy).
-pub(super) fn validate_passphrase_for_unlock(pass: &str) -> Result<(), String> {
+pub(super) fn validate_passphrase_for_unlock(pass: &str) -> AppResult<()> {
     if pass.trim().is_empty() {
-        return Err("Passphrase required".to_string());
+        return Err(AppError::PassphraseRequired);
     }
 
     // Prevent ridiculous inputs / DoS-y KDF cost.
     const MAX_LEN: usize = 4096;
     if pass.len() > MAX_LEN {
-        return Err("Passphrase too long".to_string());
+        return Err(AppError::PassphraseTooLong { max: MAX_LEN });
     }
 
     Ok(())

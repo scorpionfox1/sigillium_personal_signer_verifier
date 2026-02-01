@@ -10,7 +10,7 @@ use zeroize::Zeroizing;
 
 pub fn create_keyfile(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult<()> {
     let passphrase = Zeroizing::new(passphrase.to_owned());
-    super::validate_passphrase(&passphrase).map_err(AppError::Msg)?;
+    super::validate_passphrase(&passphrase)?;
 
     let keyfile_path = ctx
         .current_keyfile_path()
@@ -106,7 +106,7 @@ mod tests {
         let (ctx, _dir) = mk_ctx_with_selected_dir(td.path());
 
         let err = create_keyfile("", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        assert!(matches!(err, AppError::PassphraseRequired));
     }
 
     #[test]
