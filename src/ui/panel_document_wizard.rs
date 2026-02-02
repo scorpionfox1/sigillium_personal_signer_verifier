@@ -205,25 +205,6 @@ impl DocumentWizardPanel {
                 self.reset_inputs();
             }
         });
-
-        if let Some(wiz) = self.wizard.as_ref() {
-            let tid = wiz
-                .template
-                .template_id
-                .clone()
-                .unwrap_or_else(|| "(no template_id)".to_string());
-            let desc = wiz
-                .template
-                .template_desc
-                .clone()
-                .unwrap_or_else(|| "".to_string());
-
-            ui.add_space(4.0);
-            ui.label(format!("ID: {tid}"));
-            if !desc.trim().is_empty() {
-                ui.label(desc);
-            }
-        }
     }
 
     fn ui_edit_docs_impl(
@@ -295,11 +276,15 @@ impl DocumentWizardPanel {
                 true
             };
 
+            ui.add_space(6.0);
+
             ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(can_back, egui::Button::new("Back"))
-                    .clicked()
-                {
+                let button_height = 32.0;
+
+                let back_btn = egui::Button::new(egui::RichText::new("← Back").size(16.0))
+                    .min_size(egui::vec2(100.0, button_height));
+
+                if ui.add_enabled(can_back, back_btn).clicked() {
                     if let Err(e) = step_back(wiz, section_index, phase) {
                         msg.set_warn(&format!("{e}"));
                     } else {
@@ -307,12 +292,12 @@ impl DocumentWizardPanel {
                     }
                 }
 
-                let next_text = "Next";
+                ui.add_space(8.0);
 
-                if ui
-                    .add_enabled(can_next, egui::Button::new(next_text))
-                    .clicked()
-                {
+                let next_btn = egui::Button::new(egui::RichText::new("Next →").size(16.0))
+                    .min_size(egui::vec2(120.0, button_height));
+
+                if ui.add_enabled(can_next, next_btn).clicked() {
                     if at_last {
                         *mode = WizardPanelMode::ReviewBuild;
                         msg.clear();
@@ -355,11 +340,9 @@ impl DocumentWizardPanel {
             WizardStepPhase::About => {
                 ui_notice(
                     ui,
-                    "This is a summary and / or additional context information for the document you are about to view and sign.\n
-You will only sign the hash of the document text and the inputs to it, NOT this section.
-
-Please read the document itself to confirm the information given here.
-",
+                    "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed ONLY the actual document text is hashed and signed.
+                    
+i.e. only the document text itself is canonical.",
                 );
 
                 let Some(about) = current_doc_about(wiz) else {
@@ -841,9 +824,11 @@ fn ui_section_translation(
                     .size(18.0),
             );
             ui.add_space(4.0);
-            ui.colored_label(
-                egui::Color32::YELLOW,
-                "Warning: Confirm any translation independently. The authoritative text is the original section text.",
+            crate::ui::widgets::ui_notice(
+                ui,
+                "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
+
+Please confirm the translation yourself or rely on someone you trust who has already done so.",
             );
             ui.add_space(6.0);
             ui.label(format!("Language: {}", t.lang));

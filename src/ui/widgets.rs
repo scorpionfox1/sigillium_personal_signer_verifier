@@ -107,8 +107,6 @@ pub fn ui_notice(ui: &mut egui::Ui, body: &str) {
                     .color(accent),
             );
             ui.add_space(4.0);
-            ui.separator();
-            ui.add_space(4.0);
             ui.label(body);
         });
 }

@@ -357,7 +357,7 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = change_passphrase("", "newpassphrase", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        assert!(matches!(err, AppError::PassphraseRequired));
     }
 
     #[test]
@@ -367,6 +367,6 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = change_passphrase("oldpassphrase", "", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        assert!(matches!(err, AppError::PassphraseRequired));
     }
 }

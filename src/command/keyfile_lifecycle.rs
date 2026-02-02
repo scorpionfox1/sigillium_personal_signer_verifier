@@ -94,9 +94,10 @@ mod tests {
         let state = mk_state();
         let td = tempdir().unwrap();
         let ctx = AppCtx::new(td.path().to_path_buf());
+        ctx.set_selected_keyfile_dir(None);
 
-        let err = create_keyfile("passphrase", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        let err = create_keyfile("correct horse battery staple", &state, &ctx).unwrap_err();
+        assert!(matches!(err, AppError::Msg(ref s) if s == "No keyfile selected"));
     }
 
     #[test]
