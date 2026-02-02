@@ -84,3 +84,31 @@ pub fn active_key_selector(
         Ok(choice)
     }
 }
+
+pub fn ui_notice(ui: &mut egui::Ui, body: &str) {
+    // Intentionally bright "attention" yellow (not red, not muted).
+    // Works in both dark and light mode.
+    let accent = egui::Color32::from_rgb(255, 215, 90);
+
+    // Strong border + noticeable (but not obnoxious) tint.
+    let stroke = egui::Stroke::new(1.5, accent);
+    let fill = egui::Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 48);
+
+    egui::Frame::group(ui.style())
+        .inner_margin(egui::Margin::same(12))
+        .stroke(stroke)
+        .fill(fill)
+        .corner_radius(egui::CornerRadius::same(8))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Notice")
+                    .size(18.0)
+                    .strong()
+                    .color(accent),
+            );
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+            ui.label(body);
+        });
+}

@@ -68,6 +68,7 @@ fn build_doc_run_state(doc: &DocTemplate) -> DocRunState {
 
     DocRunState {
         doc_identity: doc.doc_identity.clone(),
+        doc_about: doc.doc_about.clone(),
         sections: doc.sections.clone(),
         expected_hash_hex: doc.doc_hash.hash.clone(),
         computed_hash_hex,

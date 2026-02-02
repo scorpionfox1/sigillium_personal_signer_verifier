@@ -194,9 +194,10 @@ impl KeyRegistryPanel {
 
                         if !self.enforce_standard_domain {
                             ui.add_space(4.0);
-                            ui.colored_label(
-                                egui::Color32::YELLOW,
-                                "Warning: Standardization is OFF. The domain will be used EXACTLY as typed (no trimming, no lowercasing, no validation). Invisible characters, spaces, and typos will change the derived key.",
+                            crate::ui::widgets::ui_notice(
+                                ui,
+                                "Key standardization is currently disabled.\n\
+                                Be sure to record EXACTLY the text string used for domain. Otherwise, key recovery may be more difficult.",
                             );
                         }
 
@@ -267,20 +268,11 @@ impl KeyRegistryPanel {
 
                         ui.add_space(10.0);
 
-                        egui::Frame::group(ui.style())
-                            .stroke(egui::Stroke::new(1.0, egui::Color32::YELLOW))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new("IMPORTANT: backup required")
-                                        .strong()
-                                        .color(egui::Color32::YELLOW),
-                                );
-                                ui.add_space(4.0);
-                                ui.label(
-                                    "Do NOT rely on this app as permanent storage. Securely record and store your \
-                    mnemonic + domain and any associated ID on a physical medium. Otherwise, loss of this device/keyfile would mean permanent loss of key.",
-                                );
-                            });
+                        crate::ui::widgets::ui_notice(
+                            ui,
+                            "DO NOT rely on this application as permanent key storage!\n\
+                            Create and secure physical backups of your mnemonics and associated data otherwise key recovery is impossible.",
+                        );
                     });
                 });
 

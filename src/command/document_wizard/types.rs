@@ -29,6 +29,10 @@ pub struct WizardState {
 #[derive(Debug, Clone)]
 pub struct DocRunState {
     pub doc_identity: crate::template::doc_wizard::DocIdentity,
+
+    /// Optional UI-only intro shown in the wizard. Not part of signed material.
+    pub doc_about: Option<String>,
+
     pub sections: Vec<SectionTemplate>,
     pub expected_hash_hex: String,
     pub computed_hash_hex: String,
