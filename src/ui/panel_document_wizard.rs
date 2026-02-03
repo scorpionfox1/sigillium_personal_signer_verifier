@@ -49,6 +49,7 @@ pub struct DocumentWizardPanel {
     json_buf: BTreeMap<String, String>,
 
     bundle_out: String,
+    bundle_build_attempted: bool,
 }
 
 impl DocumentWizardPanel {
@@ -63,6 +64,7 @@ impl DocumentWizardPanel {
             input_buf: BTreeMap::new(),
             json_buf: BTreeMap::new(),
             bundle_out: String::new(),
+            bundle_build_attempted: false,
         }
     }
 
@@ -75,6 +77,7 @@ impl DocumentWizardPanel {
         self.input_buf.clear();
         self.json_buf.clear();
         self.bundle_out.clear();
+        self.bundle_build_attempted = false;
         self.msg.clear();
     }
 
@@ -143,6 +146,7 @@ impl DocumentWizardPanel {
                 let input_buf = &mut self.input_buf;
                 let json_buf = &mut self.json_buf;
                 let bundle_out = &mut self.bundle_out;
+                let bundle_build_attempted = &mut self.bundle_build_attempted;
                 let mode_ref = &mut self.mode;
 
                 let section_index = &mut self.section_index;
@@ -156,6 +160,7 @@ impl DocumentWizardPanel {
                             input_buf,
                             json_buf,
                             bundle_out,
+                            bundle_build_attempted,
                             mode_ref,
                             section_index,
                             phase,
@@ -167,6 +172,7 @@ impl DocumentWizardPanel {
                             ui,
                             msg,
                             bundle_out,
+                            bundle_build_attempted,
                             mode_ref,
                             wiz,
                             route,
@@ -200,6 +206,7 @@ impl DocumentWizardPanel {
                         Ok(s) => {
                             self.template_path = Some(path);
                             self.bundle_out.clear();
+                            self.bundle_build_attempted = false;
                             self.input_buf.clear();
                             self.json_buf.clear();
                             self.mode = WizardPanelMode::EditDocs;
@@ -241,12 +248,14 @@ impl DocumentWizardPanel {
         input_buf: &mut BTreeMap<String, String>,
         json_buf: &mut BTreeMap<String, String>,
         bundle_out: &mut String,
+        bundle_build_attempted: &mut bool,
         mode: &mut WizardPanelMode,
         section_index: &mut usize,
         phase: &mut WizardStepPhase,
         wiz: &mut dw::WizardState,
     ) {
         bundle_out.clear();
+        *bundle_build_attempted = false;
 
         let doc_index = wiz.doc_index;
 
@@ -314,20 +323,17 @@ impl DocumentWizardPanel {
                     return;
                 };
 
-                ui_doc_screen_skeleton(ui, Some("About this Document"), |ui| {
-                    ui_centered_notice(
-                        ui,
-                        ui.available_width(),
-                        "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed ONLY the actual document text is hashed and signed.
+                ui_doc_screen_skeleton_notice_above_header(
+                    ui,
+                    "About this Document",
+                    "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
 
-i.e. only the document text itself is canonical.",
-                    );
-
-                    ui.add_space(8.0);
-
-                    let mut text = about.to_string();
-                    ui_doc_text_window(ui, &mut text);
-                });
+ i.e. only the document text itself is canonical.",
+                    |ui| {
+                        let mut text = about.to_string();
+                        ui_doc_text_window(ui, &mut text);
+                    },
+                );
             }
 
             WizardStepPhase::Text => {
@@ -381,7 +387,20 @@ i.e. only the document text itself is canonical.",
                         .min_size(egui::vec2(next_w, button_height));
 
                     if ui.add_enabled(can_next, next_btn).clicked() {
+                        if *phase == WizardStepPhase::Inputs {
+                            let specs = current_section(wiz, *section_index)
+                                .and_then(|s| s.inputs_spec.clone())
+                                .unwrap_or_default();
+
+                            if let Err(e) = validate_current_section_inputs(wiz, &specs) {
+                                msg.set_warn(&e);
+                                return;
+                            }
+                        }
+
                         if at_last {
+                            bundle_out.clear();
+                            *bundle_build_attempted = false;
                             *mode = WizardPanelMode::ReviewBuild;
                             msg.clear();
                         } else if let Err(e) = step_next(wiz, section_index, phase) {
@@ -399,6 +418,7 @@ i.e. only the document text itself is canonical.",
         ui: &mut egui::Ui,
         msg: &mut PanelMsgState,
         bundle_out: &mut String,
+        bundle_build_attempted: &mut bool,
         mode: &mut WizardPanelMode,
         wiz: &mut dw::WizardState,
         route: &mut Route,
@@ -407,27 +427,27 @@ i.e. only the document text itself is canonical.",
         ui.heading("Review & Build");
         ui.add_space(6.0);
 
+        let can_build = all_docs_have_no_template_errors(wiz);
+        if can_build && bundle_out.trim().is_empty() && !*bundle_build_attempted {
+            *bundle_build_attempted = true;
+            match dw::build_json_bundle(wiz) {
+                Ok(v) => match serde_json::to_string_pretty(&v) {
+                    Ok(s) => {
+                        *bundle_out = s;
+                        msg.clear();
+                    }
+                    Err(e) => msg.set_warn(&format!("Serialize failed: {e}")),
+                },
+                Err(e) => msg.set_warn(&format!("{e}")),
+            }
+        }
+
         ui.horizontal(|ui| {
             if ui.button("Back").clicked() {
                 *mode = WizardPanelMode::EditDocs;
+                bundle_out.clear();
+                *bundle_build_attempted = false;
                 msg.clear();
-            }
-
-            let can_build = all_docs_have_no_template_errors(wiz);
-            if ui
-                .add_enabled(can_build, egui::Button::new("Build JSON Bundle"))
-                .clicked()
-            {
-                match dw::build_json_bundle(wiz) {
-                    Ok(v) => match serde_json::to_string_pretty(&v) {
-                        Ok(s) => {
-                            *bundle_out = s;
-                            msg.clear();
-                        }
-                        Err(e) => msg.set_warn(&format!("Serialize failed: {e}")),
-                    },
-                    Err(e) => msg.set_warn(&format!("{e}")),
-                }
             }
 
             let can_sign_bundle = !bundle_out.trim().is_empty();
@@ -490,6 +510,14 @@ i.e. only the document text itself is canonical.",
         }
 
         ui.separator();
+        ui.add_space(6.0);
+
+        ui.group(|ui| {
+            ui.label("The JSON bundle below represents one or more documents.");
+            ui.label("It includes, for each document: (1) the raw document text hash, (2) the collected inputs, and (3) tags that will be replaced at signing time.");
+            ui.label("Those signing-time tags will be replaced with the signing UTC datetime and the associated key id for the key you sign with.");
+        });
+
         ui.add_space(6.0);
 
         ui.horizontal(|ui| {
@@ -811,6 +839,28 @@ fn ui_doc_screen_skeleton(
     });
 }
 
+fn ui_doc_screen_skeleton_notice_above_header(
+    ui: &mut egui::Ui,
+    header: &str,
+    notice: &str,
+    body: impl FnOnce(&mut egui::Ui),
+) {
+    ui.vertical_centered(|ui| {
+        let w = ui.available_width().min(1250.0);
+        ui.set_width(w);
+
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui_centered_notice(ui, ui.available_width(), notice);
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(header).strong().size(18.0));
+                ui.add_space(6.0);
+                body(ui);
+            });
+    });
+}
+
 fn ui_centered_notice(ui: &mut egui::Ui, page_w: f32, text: &str) {
     // Slightly narrower than the text column, centered above the page content.
     let notice_w = (page_w * 0.92).min(page_w);
@@ -833,7 +883,7 @@ fn ui_doc_text_window(ui: &mut egui::Ui, code: &mut String) {
     let row_h = ui.text_style_height(&egui::TextStyle::Monospace).max(1.0);
 
     // Keep a small minimum for readability, but otherwise track content.
-    let desired_rows = line_count.clamp(3, 40);
+    let desired_rows = line_count.clamp(5, 40);
     let desired_h = row_h * desired_rows as f32;
 
     ui.add_sized(
@@ -867,15 +917,9 @@ fn ui_section_translation(
     };
 
     let header = format!("{} (translation)", doc_label);
-    ui_doc_screen_skeleton(ui, Some(header.as_str()), |ui| {
-        ui_centered_notice(
-                ui,
-                ui.available_width(),
-                "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
+    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
 
-Please confirm the translation yourself or rely on someone you trust who has already done so.",
-            );
-        ui.add_space(6.0);
+Please confirm the translation yourself or rely on someone you trust who has already done so.", |ui| {
         ui.label(format!("Language: {}", t.lang));
         ui.add_space(6.0);
 
@@ -1099,15 +1143,6 @@ fn ui_section_inputs(
                 });
 
                 ui.add_space(6.0);
-            }
-
-            ui.separator();
-
-            if ui.button("Validate Section").clicked() {
-                match validate_current_section_inputs(wiz, specs) {
-                    Ok(()) => msg.set_success("Section validation OK"),
-                    Err(e) => msg.set_warn(&e),
-                }
             }
         });
     });
