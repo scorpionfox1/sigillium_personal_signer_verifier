@@ -103,10 +103,10 @@ impl KeyRegistryPanel {
                             ui.label("Label");
                             let ok = !active_label.is_empty();
                             if widgets::copy_icon_button(ui, ok, "Copy label") {
-                                ui.ctx().copy_text(active_label.clone());
+                                ui.ctx().copy_text(active_label.as_str().to_string());
                             }
                         });
-                        let mut v = active_label.clone();
+                        let mut v = active_label.as_str().to_string();
                         ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
 
                         ui.add_space(6.0);
