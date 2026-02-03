@@ -98,6 +98,30 @@ impl DocumentWizardPanel {
             .show(ui, |ui| {
                 self.ui_template_picker(ui);
 
+                if let Some(wiz) = self.wizard.as_ref() {
+                    let doc_count = wiz.docs.len();
+                    let doc_index = wiz.doc_index;
+                    let section_count = wiz
+                        .docs
+                        .get(doc_index)
+                        .map(|d| d.sections.len())
+                        .unwrap_or(0);
+
+                    let section_num = match self.phase {
+                        WizardStepPhase::About => 0,
+                        _ => self.section_index.saturating_add(1),
+                    };
+
+                    ui.label(format!(
+                        "Doc {} of {} — Section {} of {}",
+                        doc_index.saturating_add(1),
+                        doc_count.max(1),
+                        section_num,
+                        section_count,
+                    ));
+                    ui.add_space(6.0);
+                }
+
                 ui.add_space(6.0);
                 self.msg.show(ui);
                 ui.add_space(6.0);
@@ -224,7 +248,6 @@ impl DocumentWizardPanel {
     ) {
         bundle_out.clear();
 
-        let doc_count = wiz.docs.len();
         let doc_index = wiz.doc_index;
 
         let section_count = wiz
@@ -244,75 +267,19 @@ impl DocumentWizardPanel {
             .map(|d| d.doc_identity.label.clone())
             .unwrap_or_else(|| "(unknown)".to_string());
 
-        // Progress header + nav.
-        ui.group(|ui| {
-            ui.horizontal(|ui| {
-                ui.label(format!(
-                    "Doc {}/{} — {}",
-                    doc_index + 1,
-                    doc_count,
-                    doc_label
-                ));
+        // Navigation state (buttons rendered below the current screen).
+        let can_back = match *phase {
+            WizardStepPhase::About => wiz.doc_index > 0,
+            WizardStepPhase::Text => wiz.doc_index > 0 || *section_index > 0 || doc_has_about(wiz),
+            WizardStepPhase::Translation | WizardStepPhase::Inputs => true,
+        };
 
-                if section_count > 0 {
-                    ui.label(format!(
-                        "| Section {}/{}",
-                        *section_index + 1,
-                        section_count
-                    ));
-                }
-
-                ui.label(format!("| {}", phase_label(*phase)));
-            });
-
-            let can_back = match *phase {
-                WizardStepPhase::About => wiz.doc_index > 0,
-                WizardStepPhase::Text => {
-                    wiz.doc_index > 0 || *section_index > 0 || doc_has_about(wiz)
-                }
-                WizardStepPhase::Translation | WizardStepPhase::Inputs => true,
-            };
-
-            let at_last = is_last_step(wiz, *section_index, *phase);
-            let can_next = if at_last {
-                all_docs_have_no_template_errors(wiz)
-            } else {
-                true
-            };
-
-            ui.add_space(6.0);
-
-            ui.horizontal(|ui| {
-                let button_height = 32.0;
-
-                let back_btn = egui::Button::new(egui::RichText::new("← Back").size(16.0))
-                    .min_size(egui::vec2(100.0, button_height));
-
-                if ui.add_enabled(can_back, back_btn).clicked() {
-                    if let Err(e) = step_back(wiz, section_index, phase) {
-                        msg.set_warn(&format!("{e}"));
-                    } else {
-                        msg.clear();
-                    }
-                }
-
-                ui.add_space(8.0);
-
-                let next_btn = egui::Button::new(egui::RichText::new("Next →").size(16.0))
-                    .min_size(egui::vec2(120.0, button_height));
-
-                if ui.add_enabled(can_next, next_btn).clicked() {
-                    if at_last {
-                        *mode = WizardPanelMode::ReviewBuild;
-                        msg.clear();
-                    } else if let Err(e) = step_next(wiz, section_index, phase) {
-                        msg.set_warn(&format!("{e}"));
-                    } else {
-                        msg.clear();
-                    }
-                }
-            });
-        });
+        let at_last = is_last_step(wiz, *section_index, *phase);
+        let can_next = if at_last {
+            all_docs_have_no_template_errors(wiz)
+        } else {
+            true
+        };
 
         ui.add_space(8.0);
 
@@ -342,22 +309,25 @@ impl DocumentWizardPanel {
         // Centerpiece: section text / translation / inputs.
         match *phase {
             WizardStepPhase::About => {
-                ui_notice(
-                    ui,
-                    "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed ONLY the actual document text is hashed and signed.
-                    
-i.e. only the document text itself is canonical.",
-                );
-
                 let Some(about) = current_doc_about(wiz) else {
-                    // If about is absent/empty, fall through behavior: show section text.
-                    // (This should normally be unreachable if navigation is wired correctly.)
                     *phase = WizardStepPhase::Text;
                     return;
                 };
 
-                let mut text = about.to_string();
-                ui_doc_text_window(ui, &mut text);
+                ui_doc_screen_skeleton(ui, Some("About this Document"), |ui| {
+                    ui_centered_notice(
+                        ui,
+                        ui.available_width(),
+                        "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed ONLY the actual document text is hashed and signed.
+
+i.e. only the document text itself is canonical.",
+                    );
+
+                    ui.add_space(8.0);
+
+                    let mut text = about.to_string();
+                    ui_doc_text_window(ui, &mut text);
+                });
             }
 
             WizardStepPhase::Text => {
@@ -365,23 +335,64 @@ i.e. only the document text itself is canonical.",
                     ui.label("(No section.)");
                     return;
                 };
-                ui_section_text(ui, section);
+                ui_section_text(ui, &doc_label, section);
             }
             WizardStepPhase::Translation => {
                 let Some(section) = current_section(wiz, *section_index) else {
                     ui.label("(No section.)");
                     return;
                 };
-                ui_section_translation(ui, section);
+                ui_section_translation(ui, &doc_label, section);
             }
             WizardStepPhase::Inputs => {
                 let specs = current_section(wiz, *section_index)
                     .and_then(|s| s.inputs_spec.clone())
                     .unwrap_or_default();
 
-                ui_section_inputs(ui, msg, input_buf, json_buf, wiz, &specs);
+                ui_doc_screen_skeleton(ui, Some(doc_label.as_str()), |ui| {
+                    ui_section_inputs(ui, msg, input_buf, json_buf, wiz, &specs);
+                });
             }
         }
+        ui.add_space(12.0);
+
+        // Navigation (placed below the current screen content).
+        ui_doc_screen_skeleton(ui, None, |ui| {
+            let button_height = 32.0;
+            let next_w = 120.0;
+            let back_w = 110.0;
+
+            ui.horizontal(|ui| {
+                // Back on the left.
+                let back_btn = egui::Button::new(egui::RichText::new("← Back").size(16.0))
+                    .min_size(egui::vec2(back_w, button_height));
+
+                if ui.add_enabled(can_back, back_btn).clicked() {
+                    if let Err(e) = step_back(wiz, section_index, phase) {
+                        msg.set_warn(&format!("{e}"));
+                    } else {
+                        msg.clear();
+                    }
+                }
+
+                // Next on the right, same baseline and height.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let next_btn = egui::Button::new(egui::RichText::new("Next →").size(16.0))
+                        .min_size(egui::vec2(next_w, button_height));
+
+                    if ui.add_enabled(can_next, next_btn).clicked() {
+                        if at_last {
+                            *mode = WizardPanelMode::ReviewBuild;
+                            msg.clear();
+                        } else if let Err(e) = step_next(wiz, section_index, phase) {
+                            msg.set_warn(&format!("{e}"));
+                        } else {
+                            msg.clear();
+                        }
+                    }
+                });
+            });
+        });
     }
 
     fn ui_review_build_impl(
@@ -514,15 +525,6 @@ i.e. only the document text itself is canonical.",
                 }
             }
         }
-    }
-}
-
-fn phase_label(p: WizardStepPhase) -> &'static str {
-    match p {
-        WizardStepPhase::About => "About",
-        WizardStepPhase::Text => "Text",
-        WizardStepPhase::Translation => "Translation",
-        WizardStepPhase::Inputs => "Inputs",
     }
 }
 
@@ -787,49 +789,76 @@ fn is_last_step(wiz: &dw::WizardState, section_index: usize, phase: WizardStepPh
     doc_index + 1 >= doc_count
 }
 
-fn ui_doc_text_window(ui: &mut egui::Ui, text: &mut String) {
-    // Expand with window: width directly; height approximated via rows.
-    let avail = ui.available_size();
-    let w = avail.x.max(300.0);
+fn ui_doc_screen_skeleton(
+    ui: &mut egui::Ui,
+    header: Option<&str>,
+    body: impl FnOnce(&mut egui::Ui),
+) {
+    ui.vertical_centered(|ui| {
+        let w = ui.available_width().min(1250.0);
+        ui.set_width(w);
 
-    // Roughly: one text row ~= one line height.
+        // Intentionally no border: keep it boring and clean.
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                if let Some(h) = header {
+                    ui.label(egui::RichText::new(h).strong().size(18.0));
+                    ui.add_space(6.0);
+                }
+                body(ui);
+            });
+    });
+}
+
+fn ui_centered_notice(ui: &mut egui::Ui, page_w: f32, text: &str) {
+    // Slightly narrower than the text column, centered above the page content.
+    let notice_w = (page_w * 0.92).min(page_w);
+
+    ui.allocate_ui_with_layout(
+        egui::vec2(page_w, 0.0),
+        egui::Layout::top_down(egui::Align::Center),
+        |ui| {
+            ui.set_max_width(notice_w);
+            // ui_notice should naturally left-align; we are only centering the container.
+            ui_notice(ui, text);
+        },
+    );
+}
+
+fn ui_doc_text_window(ui: &mut egui::Ui, code: &mut String) {
+    // Size the box primarily from content, so short sections don't become giant empty panes.
+    // Constrain height explicitly so it cannot expand to fill an unbounded parent (e.g. a ScrollArea).
+    let line_count = code.lines().count().max(1);
     let row_h = ui.text_style_height(&egui::TextStyle::Monospace).max(1.0);
-    let target_h = avail.y.max(260.0);
-    let rows = ((target_h / row_h).floor() as usize).max(10);
 
-    ui.add(
-        egui::TextEdit::multiline(text)
-            .desired_width(w)
-            .desired_rows(rows)
+    // Keep a small minimum for readability, but otherwise track content.
+    let desired_rows = line_count.clamp(3, 40);
+    let desired_h = row_h * desired_rows as f32;
+
+    ui.add_sized(
+        egui::vec2(ui.available_width(), desired_h),
+        egui::TextEdit::multiline(code)
             .font(egui::TextStyle::Monospace)
-            .interactive(false),
+            .interactive(false)
+            .desired_rows(desired_rows),
     );
 }
 
 fn ui_section_text(
     ui: &mut egui::Ui,
+    doc_label: &str,
     s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
 ) {
-    let title = s
-        .title
-        .as_ref()
-        .map(|t| t.trim())
-        .filter(|t| !t.is_empty())
-        .unwrap_or("Section");
-
-    egui::Frame::group(ui.style())
-        .inner_margin(egui::Margin::same(12))
-        .show(ui, |ui| {
-            ui.label(egui::RichText::new(title).strong().size(18.0));
-            ui.add_space(6.0);
-
-            let mut text = s.text.clone();
-            ui_doc_text_window(ui, &mut text);
-        });
+    ui_doc_screen_skeleton(ui, Some(doc_label), |ui| {
+        let mut text = s.text.clone();
+        ui_doc_text_window(ui, &mut text);
+    });
 }
 
 fn ui_section_translation(
     ui: &mut egui::Ui,
+    doc_label: &str,
     s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
 ) {
     let Some(t) = s.translation.as_ref() else {
@@ -837,28 +866,22 @@ fn ui_section_translation(
         return;
     };
 
-    egui::Frame::group(ui.style())
-        .inner_margin(egui::Margin::same(12))
-        .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new("Translation (non-authoritative)")
-                    .strong()
-                    .size(18.0),
-            );
-            ui.add_space(4.0);
-            crate::ui::widgets::ui_notice(
+    let header = format!("{} (translation)", doc_label);
+    ui_doc_screen_skeleton(ui, Some(header.as_str()), |ui| {
+        ui_centered_notice(
                 ui,
+                ui.available_width(),
                 "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
 
 Please confirm the translation yourself or rely on someone you trust who has already done so.",
             );
-            ui.add_space(6.0);
-            ui.label(format!("Language: {}", t.lang));
-            ui.add_space(6.0);
+        ui.add_space(6.0);
+        ui.label(format!("Language: {}", t.lang));
+        ui.add_space(6.0);
 
-            let mut text = t.text.clone();
-            ui_doc_text_window(ui, &mut text);
-        });
+        let mut text = t.text.clone();
+        ui_doc_text_window(ui, &mut text);
+    });
 }
 
 fn ui_section_inputs(
@@ -870,214 +893,223 @@ fn ui_section_inputs(
     specs: &[InputSpec],
 ) {
     ui.group(|ui| {
-        ui.label(egui::RichText::new("Inputs").strong().size(18.0));
-        ui.add_space(6.0);
+        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.label(egui::RichText::new("Inputs").strong().size(18.0));
+            ui.add_space(6.0);
 
-        if specs.is_empty() {
-            ui.label("(No inputs for this section.)");
-            return;
-        }
+            if specs.is_empty() {
+                ui.label("(No inputs for this section.)");
+                return;
+            }
 
-        for spec in specs.iter().cloned() {
-            let key = spec.key.clone();
-            // existing per-input UI logic continues here
+            for spec in specs.iter().cloned() {
+                let key = spec.key.clone();
+                // existing per-input UI logic continues here
 
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
-                    if spec.required {
-                        ui.label(format!("{} *", spec.label));
-                    } else {
-                        ui.label(&spec.label);
-                    }
-                    ui.label(format!("({})", key));
-                });
-
-                match spec.input_type {
-                    InputType::String | InputType::Date => {
-                        let buf = input_buf
-                            .entry(key.clone())
-                            .or_insert_with(|| current_value_string(wiz, &key));
-
-                        let resp = ui.add(egui::TextEdit::singleline(buf));
-                        if resp.changed() {
-                            if let Err(e) = dw::set_input_value_current_doc(
-                                wiz,
-                                &key,
-                                JsonValue::String(buf.clone()),
-                            ) {
-                                msg.set_warn(&format!("{e}"));
-                            }
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        if spec.required {
+                            ui.label(format!("{} *", spec.label));
+                        } else {
+                            ui.label(&spec.label);
                         }
-                    }
+                        ui.label(format!("({})", key));
+                    });
 
-                    InputType::Enum => {
-                        let choices = spec.choices.clone().unwrap_or_default();
-                        let cur = current_value_string(wiz, &key);
+                    match spec.input_type {
+                        InputType::String | InputType::Date => {
+                            let buf = input_buf
+                                .entry(key.clone())
+                                .or_insert_with(|| current_value_string(wiz, &key));
 
-                        egui::ComboBox::from_id_salt(format!("enum_{key}"))
-                            .selected_text(if cur.is_empty() {
-                                "(select)".to_string()
-                            } else {
-                                cur.clone()
-                            })
-                            .show_ui(ui, |ui| {
-                                for c in choices.iter() {
-                                    if ui.selectable_label(cur == *c, c).clicked() {
-                                        if let Err(e) = dw::set_input_value_current_doc(
-                                            wiz,
-                                            &key,
-                                            JsonValue::String(c.clone()),
-                                        ) {
-                                            msg.set_warn(&format!("{e}"));
-                                        }
-                                    }
-                                }
-                            });
-                    }
-
-                    InputType::Number => {
-                        let buf = input_buf
-                            .entry(key.clone())
-                            .or_insert_with(|| current_value_string(wiz, &key));
-
-                        let resp = ui.add(egui::TextEdit::singleline(buf));
-                        if resp.changed() {
-                            let s = buf.trim();
-                            if s.is_empty() {
-                                // allow clearing in UI buffer (value remains until policy changes)
-                            } else if let Ok(x) = s.parse::<f64>() {
-                                if let Some(n) = serde_json::Number::from_f64(x) {
-                                    if let Err(e) =
-                                        dw::set_input_value_current_doc(wiz, &key, n.into())
-                                    {
-                                        msg.set_warn(&format!("{e}"));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    InputType::Int => {
-                        let buf = input_buf
-                            .entry(key.clone())
-                            .or_insert_with(|| current_value_string(wiz, &key));
-
-                        let resp = ui.add(egui::TextEdit::singleline(buf));
-                        if resp.changed() {
-                            let s = buf.trim();
-                            if s.is_empty() {
-                                // allow clearing in UI buffer (value remains until policy changes)
-                            } else if let Ok(x) = s.parse::<i64>() {
+                            let resp = ui.add(egui::TextEdit::singleline(buf));
+                            if resp.changed() {
                                 if let Err(e) = dw::set_input_value_current_doc(
                                     wiz,
                                     &key,
-                                    JsonValue::Number(x.into()),
+                                    JsonValue::String(buf.clone()),
                                 ) {
                                     msg.set_warn(&format!("{e}"));
                                 }
                             }
                         }
-                    }
 
-                    InputType::Bool => {
-                        let cur = current_value_bool(wiz, &key);
-                        let mut v = cur;
+                        InputType::Enum => {
+                            let choices = spec.choices.clone().unwrap_or_default();
+                            let cur = current_value_string(wiz, &key);
 
-                        if ui.checkbox(&mut v, "true/false").changed() {
-                            if let Err(e) = dw::set_input_value_current_doc(wiz, &key, v.into()) {
-                                msg.set_warn(&format!("{e}"));
-                            }
-                        }
-                    }
-
-                    InputType::Json => {
-                        let buf = json_buf
-                            .entry(key.clone())
-                            .or_insert_with(|| current_value_json_pretty(wiz, &key));
-
-                        if let Some(sample) = spec.sample_json.as_ref() {
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label("Input JSON");
-                                    let resp = ui.add(
-                                        egui::TextEdit::multiline(buf)
-                                            .desired_rows(8)
-                                            .code_editor(),
-                                    );
-
-                                    if resp.changed() {
-                                        let s = buf.trim();
-                                        if s.is_empty() {
-                                            // Treat empty as "clear"
+                            egui::ComboBox::from_id_salt(format!("enum_{key}"))
+                                .selected_text(if cur.is_empty() {
+                                    "(select)".to_string()
+                                } else {
+                                    cur.clone()
+                                })
+                                .show_ui(ui, |ui| {
+                                    for c in choices.iter() {
+                                        if ui.selectable_label(cur == *c, c).clicked() {
                                             if let Err(e) = dw::set_input_value_current_doc(
                                                 wiz,
                                                 &key,
-                                                JsonValue::Null,
+                                                JsonValue::String(c.clone()),
                                             ) {
                                                 msg.set_warn(&format!("{e}"));
-                                            }
-                                        } else {
-                                            match dw::set_input_json_from_str_current_doc(
-                                                wiz, &key, buf,
-                                            ) {
-                                                Ok(()) => msg.clear(),
-                                                Err(e) => msg.set_warn(&format!("{e}")),
                                             }
                                         }
                                     }
                                 });
+                        }
 
-                                ui.add_space(12.0);
+                        InputType::Number => {
+                            let buf = input_buf
+                                .entry(key.clone())
+                                .or_insert_with(|| current_value_string(wiz, &key));
 
-                                ui.vertical(|ui| {
-                                    ui.label("Sample JSON");
-                                    let mut sample_pretty = serde_json::to_string_pretty(sample)
-                                        .unwrap_or_else(|_| sample.to_string());
-
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut sample_pretty)
-                                            .desired_rows(8)
-                                            .code_editor()
-                                            .interactive(false),
-                                    );
-                                });
-                            });
-                        } else {
-                            let resp = ui
-                                .add(egui::TextEdit::multiline(buf).desired_rows(8).code_editor());
-
+                            let resp = ui.add(egui::TextEdit::singleline(buf));
                             if resp.changed() {
                                 let s = buf.trim();
                                 if s.is_empty() {
-                                    // Treat empty as "clear"
-                                    if let Err(e) =
-                                        dw::set_input_value_current_doc(wiz, &key, JsonValue::Null)
-                                    {
+                                    // allow clearing in UI buffer (value remains until policy changes)
+                                } else if let Ok(x) = s.parse::<f64>() {
+                                    if let Some(n) = serde_json::Number::from_f64(x) {
+                                        if let Err(e) =
+                                            dw::set_input_value_current_doc(wiz, &key, n.into())
+                                        {
+                                            msg.set_warn(&format!("{e}"));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        InputType::Int => {
+                            let buf = input_buf
+                                .entry(key.clone())
+                                .or_insert_with(|| current_value_string(wiz, &key));
+
+                            let resp = ui.add(egui::TextEdit::singleline(buf));
+                            if resp.changed() {
+                                let s = buf.trim();
+                                if s.is_empty() {
+                                    // allow clearing in UI buffer (value remains until policy changes)
+                                } else if let Ok(x) = s.parse::<i64>() {
+                                    if let Err(e) = dw::set_input_value_current_doc(
+                                        wiz,
+                                        &key,
+                                        JsonValue::Number(x.into()),
+                                    ) {
                                         msg.set_warn(&format!("{e}"));
                                     }
-                                } else {
-                                    match dw::set_input_json_from_str_current_doc(wiz, &key, buf) {
-                                        Ok(()) => msg.clear(),
-                                        Err(e) => msg.set_warn(&format!("{e}")),
+                                }
+                            }
+                        }
+
+                        InputType::Bool => {
+                            let cur = current_value_bool(wiz, &key);
+                            let mut v = cur;
+
+                            if ui.checkbox(&mut v, "true/false").changed() {
+                                if let Err(e) = dw::set_input_value_current_doc(wiz, &key, v.into())
+                                {
+                                    msg.set_warn(&format!("{e}"));
+                                }
+                            }
+                        }
+
+                        InputType::Json => {
+                            let buf = json_buf
+                                .entry(key.clone())
+                                .or_insert_with(|| current_value_json_pretty(wiz, &key));
+
+                            if let Some(sample) = spec.sample_json.as_ref() {
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui| {
+                                        ui.label("Input JSON");
+                                        let resp = ui.add(
+                                            egui::TextEdit::multiline(buf)
+                                                .desired_rows(8)
+                                                .code_editor(),
+                                        );
+
+                                        if resp.changed() {
+                                            let s = buf.trim();
+                                            if s.is_empty() {
+                                                // Treat empty as "clear"
+                                                if let Err(e) = dw::set_input_value_current_doc(
+                                                    wiz,
+                                                    &key,
+                                                    JsonValue::Null,
+                                                ) {
+                                                    msg.set_warn(&format!("{e}"));
+                                                }
+                                            } else {
+                                                match dw::set_input_json_from_str_current_doc(
+                                                    wiz, &key, buf,
+                                                ) {
+                                                    Ok(()) => msg.clear(),
+                                                    Err(e) => msg.set_warn(&format!("{e}")),
+                                                }
+                                            }
+                                        }
+                                    });
+
+                                    ui.add_space(12.0);
+
+                                    ui.vertical(|ui| {
+                                        ui.label("Sample JSON");
+                                        let mut sample_pretty =
+                                            serde_json::to_string_pretty(sample)
+                                                .unwrap_or_else(|_| sample.to_string());
+
+                                        ui.add(
+                                            egui::TextEdit::multiline(&mut sample_pretty)
+                                                .desired_rows(8)
+                                                .code_editor()
+                                                .interactive(false),
+                                        );
+                                    });
+                                });
+                            } else {
+                                let resp = ui.add(
+                                    egui::TextEdit::multiline(buf).desired_rows(8).code_editor(),
+                                );
+
+                                if resp.changed() {
+                                    let s = buf.trim();
+                                    if s.is_empty() {
+                                        // Treat empty as "clear"
+                                        if let Err(e) = dw::set_input_value_current_doc(
+                                            wiz,
+                                            &key,
+                                            JsonValue::Null,
+                                        ) {
+                                            msg.set_warn(&format!("{e}"));
+                                        }
+                                    } else {
+                                        match dw::set_input_json_from_str_current_doc(
+                                            wiz, &key, buf,
+                                        ) {
+                                            Ok(()) => msg.clear(),
+                                            Err(e) => msg.set_warn(&format!("{e}")),
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
 
-            ui.add_space(6.0);
-        }
-
-        ui.separator();
-
-        if ui.button("Validate Section").clicked() {
-            match validate_current_section_inputs(wiz, specs) {
-                Ok(()) => msg.set_success("Section validation OK"),
-                Err(e) => msg.set_warn(&e),
+                ui.add_space(6.0);
             }
-        }
+
+            ui.separator();
+
+            if ui.button("Validate Section").clicked() {
+                match validate_current_section_inputs(wiz, specs) {
+                    Ok(()) => msg.set_success("Section validation OK"),
+                    Err(e) => msg.set_warn(&e),
+                }
+            }
+        });
     });
 }
 
