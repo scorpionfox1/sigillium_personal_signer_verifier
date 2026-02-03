@@ -270,8 +270,7 @@ impl KeyRegistryPanel {
 
                         crate::ui::widgets::ui_notice(
                             ui,
-                            "DO NOT rely on this application as permanent key storage!\n\
-                            Create and secure physical backups of your mnemonics and associated data otherwise key recovery is impossible.",
+                            "DO NOT rely on this application as permanent key storage! Create and securely store physical backups of your mnemonics and any associated meta-data. Otherwise, key recovery is impossible.",
                         );
                     });
                 });

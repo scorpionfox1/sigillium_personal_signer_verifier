@@ -21,7 +21,6 @@ pub struct UserMsg {
 
 #[derive(Debug)]
 pub enum AppError {
-    KeyfilePassphraseBad,
     // --------------------------------------------------
     // generic / plumbing
     // --------------------------------------------------
@@ -130,6 +129,7 @@ pub enum AppError {
     // --------------------------------------------------
     // passphrase validation
     // --------------------------------------------------
+    KeyfilePassphraseBad,
     PassphraseRequired,
     PassphraseTooShort { min: usize },
     PassphraseTooLong { max: usize },
@@ -143,7 +143,6 @@ impl AppError {
         let detail = Some(self.to_string());
 
         let short: &'static str = match self {
-            KeyfilePassphraseBad => "Incorrect keyfile passphrase.",
             // generic
             Io(_) => "File operation failed.",
             Msg(_) => "Operation failed.",
@@ -237,16 +236,20 @@ impl AppError {
             }
 
             // passphrase validation
+            KeyfilePassphraseBad => {
+                kind = UserMsgKind::Warn;
+                "Incorrect keyfile passphrase."
+            }
             PassphraseRequired => {
-                kind = UserMsgKind::Info;
+                kind = UserMsgKind::Warn;
                 "Passphrase required."
             }
             PassphraseTooShort { .. } => {
-                kind = UserMsgKind::Info;
+                kind = UserMsgKind::Warn;
                 "Passphrase too short."
             }
             PassphraseTooLong { .. } => {
-                kind = UserMsgKind::Info;
+                kind = UserMsgKind::Warn;
                 "Passphrase too long."
             }
         };
@@ -264,7 +267,6 @@ impl fmt::Display for AppError {
         use AppError::*;
 
         match self {
-            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
             Io(e) => write!(f, "io error: {e}"),
             Msg(s) => write!(f, "{s}"),
             InternalStateLockFailed => write!(f, "internal state lock failed"),
@@ -355,6 +357,7 @@ impl fmt::Display for AppError {
             KeyfilePermsInsufficient => write!(f, "insufficient keyfile permissions"),
             PlatformHardeningFailed => write!(f, "platform hardening failure"),
 
+            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
             PassphraseRequired => write!(f, "passphrase required"),
             PassphraseTooShort { min } => write!(f, "passphrase too short (min {min})"),
             PassphraseTooLong { max } => write!(f, "passphrase too long (max {max})"),

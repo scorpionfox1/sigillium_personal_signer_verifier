@@ -215,7 +215,7 @@ impl VerifyPanel {
                             .unwrap_or(SignVerifyMode::Text);
 
                         match command::verify_payload(pk_hex, payload, sig_b64, mode, None) {
-                            Ok(true) => self.msg.set_success("Valid signature."),
+                            Ok(true) => self.msg.set_info("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),
                             Err(e) => {
                                 if let AppError::KeyfileQuarantined { .. } = e {

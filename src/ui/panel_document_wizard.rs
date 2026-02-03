@@ -98,6 +98,10 @@ impl DocumentWizardPanel {
             .show(ui, |ui| {
                 self.ui_template_picker(ui);
 
+                ui.add_space(6.0);
+                self.msg.show(ui);
+                ui.add_space(6.0);
+
                 let Some(wiz) = self.wizard.as_mut() else {
                     ui.add_space(6.0);
                     ui.label("Load a template to begin.");
@@ -492,6 +496,24 @@ i.e. only the document text itself is canonical.",
                 .code_editor()
                 .lock_focus(true),
         );
+
+        ui.separator();
+        ui.add_space(6.0);
+
+        if ui.button("Copy Raw Document Text to Clipboard").clicked() {
+            match wiz.docs.get(wiz.doc_index) {
+                Some(d) => {
+                    let raw = sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections(
+                d.sections.iter().map(|s| s.text.as_str()),
+            );
+                    ui.ctx().copy_text(raw);
+                    msg.set_success("Copied raw document text to clipboard.");
+                }
+                None => {
+                    msg.set_warn("No current document is selected.");
+                }
+            }
+        }
     }
 }
 
