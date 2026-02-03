@@ -43,8 +43,7 @@ pub fn list_key_meta(path: &Path, master_key: &[u8; 32]) -> AppResult<Vec<KeyMet
             &aad,
             &k.label.nonce_b64,
             &k.label.ciphertext_b64,
-        )?
-        .to_string();
+        )?;
 
         out.push(KeyMeta {
             id: k.id,

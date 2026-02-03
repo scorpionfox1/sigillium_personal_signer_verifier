@@ -87,6 +87,13 @@ pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
         crate::platform::rename_replace(&tmp, path)
             .map_err(|e| AppError::KeyfileFsRenameFailed(e.to_string()))?;
 
+        if let Some(fail) = crate::platform::fsync_dir_best_effort(parent) {
+            return Err(AppError::KeyfileFsSyncFailed(format!(
+                "directory fsync failed: {}",
+                fail.msg
+            )));
+        }
+
         Ok(())
     })();
 

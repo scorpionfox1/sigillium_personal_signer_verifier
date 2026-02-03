@@ -295,7 +295,7 @@ mod tests {
                 id: 1,
                 domain: "example.com".to_string(),
                 public_key: pubk,
-                label: "test-key".to_string(),
+                label: Zeroizing::new("test-key".to_string()),
             });
         }
 

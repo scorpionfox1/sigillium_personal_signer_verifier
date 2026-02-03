@@ -33,7 +33,7 @@ pub fn active_key_selector(
     let mut choice: Option<KeyId> = current_active_id;
 
     let selected_text = match choice.and_then(|id| metas.iter().find(|k| k.id == id)) {
-        Some(k) => format!("{} ({})", k.label, k.domain),
+        Some(k) => format!("{} ({})", k.label.as_str(), k.domain),
         None => "None".to_string(),
     };
 
@@ -53,7 +53,7 @@ pub fn active_key_selector(
                         ui.selectable_value(
                             &mut choice,
                             Some(k.id),
-                            format!("{} ({})", k.label, k.domain),
+                            format!("{} ({})", k.label.as_str(), k.domain),
                         );
                     }
                 });

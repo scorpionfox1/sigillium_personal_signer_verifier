@@ -60,6 +60,8 @@ pub fn install_key(
     let op_res: AppResult<()> = (|| {
         enforce_keyfile_perms_best_effort(state, &keyfile_path, &ctx.app_data_dir, "install_key");
 
+        let _lock = acquire_keyfile_lock(&keyfile_path)?;
+
         with_master_key(state, |mk| {
             keyfile::append_key(
                 &keyfile_path,
@@ -71,8 +73,6 @@ pub fn install_key(
                 &associated_norm, // may be ""
             )
         })?;
-
-        let _lock = acquire_keyfile_lock(&keyfile_path)?;
 
         enforce_keyfile_perms_best_effort(state, &keyfile_path, &ctx.app_data_dir, "install_key");
 
@@ -110,11 +110,11 @@ pub fn uninstall_active_key(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
             "uninstall_active_key",
         );
 
+        let _lock = acquire_keyfile_lock(&keyfile_path)?;
+
         with_master_key(state, |mk| {
             keyfile::remove_key(&keyfile_path, &*mk, active_id)
         })?;
-
-        let _lock = acquire_keyfile_lock(&keyfile_path)?;
 
         enforce_keyfile_perms_best_effort(
             state,
