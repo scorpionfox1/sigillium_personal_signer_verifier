@@ -7,12 +7,13 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree};
-use windows_sys::Win32::Security::{ConvertSidToStringSidW, GetTokenInformation, TokenUser};
+use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+use windows_sys::Win32::Security::{GetTokenInformation, OpenProcessToken, TokenUser, TOKEN_QUERY};
 use windows_sys::Win32::Storage::FileSystem::{
     MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
-use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken, TOKEN_QUERY};
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 fn current_user_principal() -> Option<String> {
     if let Some(sid) = current_user_sid() {
@@ -82,7 +83,7 @@ fn current_user_sid() -> Option<String> {
             len += 1;
         }
         let sid = String::from_utf16_lossy(std::slice::from_raw_parts(sid_str, len));
-        LocalFree(sid_str as isize);
+        LocalFree(sid_str as *mut core::ffi::c_void);
         CloseHandle(token);
         Some(sid)
     }
