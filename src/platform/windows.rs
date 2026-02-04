@@ -8,12 +8,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree};
 use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
-use windows_sys::Win32::Security::{GetTokenInformation, OpenProcessToken, TokenUser, TOKEN_QUERY};
+use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY};
 use windows_sys::Win32::Storage::FileSystem::{
     MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
+use windows_sys::Win32::System::Threading::OpenProcessToken;
 
 fn current_user_principal() -> Option<String> {
     if let Some(sid) = current_user_sid() {
