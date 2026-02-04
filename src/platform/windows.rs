@@ -6,14 +6,20 @@ use std::io::{Seek, SeekFrom, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use windows_sys::Win32::Foundation::GetLastError;
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree};
+use windows_sys::Win32::Security::{ConvertSidToStringSidW, GetTokenInformation, TokenUser};
 use windows_sys::Win32::Storage::FileSystem::{
     MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
+use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken, TOKEN_QUERY};
 
 fn current_user_principal() -> Option<String> {
-    // Try SID via `whoami /user`
+    if let Some(sid) = current_user_sid() {
+        return Some(format!("*{sid}"));
+    }
+
+    // Fallback: Try SID via `whoami /user`
     if let Ok(out) = Command::new("whoami").arg("/user").output() {
         if out.status.success() {
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -34,6 +40,52 @@ fn current_user_principal() -> Option<String> {
     let user = std::env::var("USERNAME").ok()?;
     let domain = std::env::var("USERDOMAIN").ok()?;
     Some(format!("{}\\{}", domain, user))
+}
+
+fn current_user_sid() -> Option<String> {
+    unsafe {
+        let mut token = 0;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return None;
+        }
+
+        let mut needed: u32 = 0;
+        let _ = GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+        if needed == 0 {
+            CloseHandle(token);
+            return None;
+        }
+
+        let mut buf = vec![0u8; needed as usize];
+        let ok = GetTokenInformation(
+            token,
+            TokenUser,
+            buf.as_mut_ptr() as *mut _,
+            needed,
+            &mut needed,
+        );
+        if ok == 0 {
+            CloseHandle(token);
+            return None;
+        }
+
+        let token_user = &*(buf.as_ptr() as *const windows_sys::Win32::Security::TOKEN_USER);
+        let mut sid_str: *mut u16 = std::ptr::null_mut();
+        let ok = ConvertSidToStringSidW(token_user.User.Sid, &mut sid_str);
+        if ok == 0 || sid_str.is_null() {
+            CloseHandle(token);
+            return None;
+        }
+
+        let mut len = 0usize;
+        while *sid_str.add(len) != 0 {
+            len += 1;
+        }
+        let sid = String::from_utf16_lossy(std::slice::from_raw_parts(sid_str, len));
+        LocalFree(sid_str as isize);
+        CloseHandle(token);
+        Some(sid)
+    }
 }
 
 pub fn harden_process_best_effort() -> Vec<BestEffortFailure> {
@@ -218,6 +270,25 @@ fn icacls_lockdown_best_effort(
     msg: &'static str,
 ) -> Option<BestEffortFailure> {
     let p = path.to_string_lossy().to_string();
+    let metadata = fs::metadata(path).ok();
+    let perm = match metadata {
+        Some(ref meta) if meta.is_dir() => "(OI)(CI)(F)",
+        Some(ref meta) if meta.is_file() => "(F)",
+        Some(_) => {
+            return Some(BestEffortFailure {
+                kind: "windows_icacls_invalid_target",
+                errno: None,
+                msg: "icacls target was not a regular file or directory",
+            });
+        }
+        None => {
+            return Some(BestEffortFailure {
+                kind: "windows_icacls_metadata_failed",
+                errno: None,
+                msg: "icacls target metadata failed",
+            });
+        }
+    };
 
     let principal = match current_user_principal() {
         Some(p) => p,
@@ -231,7 +302,7 @@ fn icacls_lockdown_best_effort(
     };
 
     let grant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant {}:(F)", principal)])
+        .args([&p, &format!("/grant {}:{perm}", principal)])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -259,7 +330,7 @@ fn icacls_lockdown_best_effort(
     }
 
     let regrant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant:r {}:(F)", principal)])
+        .args([&p, &format!("/grant:r {}:{perm}", principal)])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
