@@ -387,8 +387,13 @@ impl DocumentWizardPanel {
                                 .and_then(|s| s.inputs_spec.clone())
                                 .unwrap_or_default();
 
+                            let mut errors = sync_json_buffers_for_specs(wiz, &specs, json_buf);
                             if let Err(e) = validate_current_section_inputs(wiz, &specs) {
-                                msg.set_warn(&e);
+                                errors.extend(e.lines().map(|line| line.to_string()));
+                            }
+                            if !errors.is_empty() {
+                                msg.set_warn(&errors.join("\n"));
+
                                 return;
                             }
                         }
@@ -806,10 +811,7 @@ fn ui_section_inputs(
                                                 .desired_rows(8)
                                                 .code_editor(),
                                         );
-
-                                        if resp.changed() {
-                                            apply_json_buffer_change(msg, wiz, &key, buf);
-                                        }
+                                        let _ = resp;
                                     });
 
                                     ui.add_space(12.0);
@@ -833,9 +835,7 @@ fn ui_section_inputs(
                                     egui::TextEdit::multiline(buf).desired_rows(8).code_editor(),
                                 );
 
-                                if resp.changed() {
-                                    apply_json_buffer_change(msg, wiz, &key, buf);
-                                }
+                                let _ = resp;
                             }
                         }
                     }
@@ -878,22 +878,41 @@ fn current_value_json_pretty(wiz: &dw::WizardState, key: &str) -> String {
     serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
 }
 
-fn apply_json_buffer_change(
-    msg: &mut PanelMsgState,
+fn sync_json_buffers_for_specs(
     wiz: &mut dw::WizardState,
-    key: &str,
-    buf: &str,
-) {
-    let s = buf.trim();
-    if s.is_empty() {
-        // Treat empty as "clear"
-        if let Err(e) = dw::set_input_value_current_doc(wiz, key, JsonValue::Null) {
-            msg.set_warn(&format!("{e}"));
+    specs: &[InputSpec],
+    json_buf: &mut BTreeMap<String, String>,
+) -> Vec<String> {
+    let mut errors = Vec::new();
+
+    for spec in specs {
+        if !matches!(spec.input_type, InputType::Json) {
+            continue;
         }
-    } else {
-        match dw::set_input_json_from_str_current_doc(wiz, key, buf) {
-            Ok(()) => msg.clear(),
-            Err(e) => msg.set_warn(&format!("{e}")),
+
+        let key = spec.key.clone();
+        let buf = json_buf
+            .entry(key.clone())
+            .or_insert_with(|| current_value_json_pretty(wiz, &key));
+
+        let s = buf.trim();
+        if s.is_empty() {
+            if let Err(e) = dw::set_input_value_current_doc(wiz, &key, JsonValue::Null) {
+                errors.push(format!("{} ({}): {}", spec.label, key, e));
+            }
+            continue;
+        }
+
+        match serde_json::from_str::<JsonValue>(s) {
+            Ok(v) => {
+                if let Err(e) = dw::set_input_value_current_doc(wiz, &key, v) {
+                    errors.push(format!("{} ({}): {}", spec.label, key, e));
+                }
+            }
+            Err(e) => {
+                errors.push(format!("{} ({}): invalid JSON: {}", spec.label, key, e));
+            }
         }
     }
+    errors
 }
