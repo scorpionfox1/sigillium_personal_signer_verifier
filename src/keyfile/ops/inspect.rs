@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use crate::{
+    crypto as app_crypto,
     error::{AppError, AppResult},
     keyfile::{
         crypto::{
@@ -17,7 +18,6 @@ use crate::{
 };
 
 use base64::{engine::general_purpose, Engine};
-use hex;
 use zeroize::{Zeroize, Zeroizing};
 
 use super::{aad_for_label, decrypt_string_with_aad};
@@ -29,13 +29,7 @@ pub fn list_key_meta(path: &Path, master_key: &[u8; 32]) -> AppResult<Vec<KeyMet
     let mut out = Vec::with_capacity(data.keys.len());
 
     for k in &data.keys {
-        let pk_bytes = hex::decode(&k.public_key_hex).map_err(|_| AppError::InvalidPublicKeyHex)?;
-        if pk_bytes.len() != 32 {
-            return Err(AppError::InvalidPublicKeyLength);
-        }
-
-        let mut pk = [0u8; 32];
-        pk.copy_from_slice(&pk_bytes);
+        let pk = app_crypto::decode_public_key_hex(&k.public_key_hex)?;
 
         let aad = aad_for_label(&data, k.id, &k.domain, &k.public_key_hex);
         let label = decrypt_string_with_aad(

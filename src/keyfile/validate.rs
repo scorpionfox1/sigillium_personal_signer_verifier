@@ -1,5 +1,6 @@
 // src/keyfile/validate.rs
 
+use crate::crypto as app_crypto;
 use crate::error::{AppError, AppResult};
 use crate::keyfile::crypto::decode_nonce12_b64;
 use crate::keyfile::fs::read_json;
@@ -47,10 +48,7 @@ pub(crate) fn validate_keyfile_structure(data: &KeyfileData) -> AppResult<()> {
             return Err(AppError::KeyfileStructCorrupted);
         }
 
-        let pk = hex::decode(&k.public_key_hex).map_err(|_| AppError::InvalidPublicKeyHex)?;
-        if pk.len() != 32 {
-            return Err(AppError::InvalidPublicKeyLength);
-        }
+        app_crypto::decode_public_key_hex(&k.public_key_hex)?;
 
         // nonce is always 12 bytes for ChaCha20-Poly1305
         decode_nonce12_b64(&k.key_nonce_b64)?;

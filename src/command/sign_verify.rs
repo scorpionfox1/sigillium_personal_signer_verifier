@@ -138,15 +138,7 @@ pub fn verify_payload(
     };
 
     // --- decode public key: hex -> [u8; 32] ---
-    let pk_bytes = hex::decode(public_key_hex.trim()).map_err(|_| AppError::InvalidPublicKeyHex)?;
-
-    if pk_bytes.len() != 32 {
-        return Err(AppError::InvalidPublicKeyLength);
-    }
-
-    let pk: [u8; 32] = pk_bytes
-        .try_into()
-        .map_err(|_| AppError::InvalidPublicKeyLength)?;
+    let pk = crypto::decode_public_key_hex(public_key_hex)?;
 
     // --- decode signature: base64 -> [u8; 64] ---
     let sig_bytes = STANDARD

@@ -12,9 +12,8 @@ use std::path::PathBuf;
 use super::{Route, RoutePrefill};
 
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
-    self as dw, all_docs_have_no_template_errors, current_doc_about, doc_has_about,
-    section_has_inputs, section_has_translation, step_back, step_next,
-    validate_current_section_inputs, WizardStepPhase,
+    self as dw, all_docs_have_no_template_errors, current_doc_about, doc_has_about, is_last_step,
+    step_back, step_next, validate_current_section_inputs, WizardStepPhase,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
 
@@ -549,55 +548,6 @@ impl DocumentWizardPanel {
             }
         }
     }
-}
-
-fn is_last_step(wiz: &dw::WizardState, section_index: usize, phase: WizardStepPhase) -> bool {
-    let doc_count = wiz.docs.len();
-    let doc_index = wiz.doc_index;
-    let Some(doc) = wiz.docs.get(doc_index) else {
-        return true;
-    };
-
-    // About is never the last step if there are any sections.
-    if matches!(phase, WizardStepPhase::About) {
-        return doc.sections.is_empty() && (doc_index + 1 >= doc_count);
-    }
-
-    let section_count = doc.sections.len();
-    let Some(sec) = doc.sections.get(section_index) else {
-        return true;
-    };
-
-    // Determine whether there is any step after the current one.
-    match phase {
-        WizardStepPhase::Text => {
-            if section_has_translation(sec) {
-                return false;
-            }
-            if section_has_inputs(sec) {
-                return false;
-            }
-            // no translation/inputs -> next section/doc
-        }
-        WizardStepPhase::Translation => {
-            if section_has_inputs(sec) {
-                return false;
-            }
-            // otherwise next section/doc
-        }
-        WizardStepPhase::Inputs => {
-            // always next section/doc
-        }
-
-        // Already handled above, but keeps the match exhaustive.
-        WizardStepPhase::About => return doc.sections.is_empty() && (doc_index + 1 >= doc_count),
-    }
-
-    if section_index + 1 < section_count {
-        return false;
-    }
-
-    doc_index + 1 >= doc_count
 }
 
 fn ui_doc_screen_skeleton(
