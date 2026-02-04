@@ -26,8 +26,6 @@ fn main() -> eframe::Result<()> {
         proj.data_dir().to_path_buf()
     };
 
-    std::fs::create_dir_all(&app_data_dir).expect("Could not create app data dir");
-
     let state = sigillium_personal_signer_verifier_lib::init_state(&app_data_dir)
         .expect("failed to init app state");
     let state = Arc::new(state);

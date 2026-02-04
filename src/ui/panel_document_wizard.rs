@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use super::{Route, RoutePrefill};
 
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
-    self as dw, validate_current_section_inputs,
+    self as dw, all_docs_have_no_template_errors, current_doc_about, doc_has_about,
+    section_has_inputs, section_has_translation, step_back, step_next,
+    validate_current_section_inputs, WizardStepPhase,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
 
@@ -20,14 +22,6 @@ use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, In
 enum WizardPanelMode {
     EditDocs,
     ReviewBuild,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum WizardStepPhase {
-    About,
-    Text,
-    Translation,
-    Inputs,
 }
 
 pub struct DocumentWizardPanel {
@@ -40,7 +34,7 @@ pub struct DocumentWizardPanel {
 
     // UI-owned navigation state.
     section_index: usize,
-    phase: WizardStepPhase,
+    phase: dw::WizardStepPhase,
 
     // raw text buffers for inputs that are edited as text
     input_buf: BTreeMap<String, String>,
@@ -60,7 +54,7 @@ impl DocumentWizardPanel {
             wizard: None,
             mode: WizardPanelMode::EditDocs,
             section_index: 0,
-            phase: WizardStepPhase::Text,
+            phase: dw::WizardStepPhase::Text,
             input_buf: BTreeMap::new(),
             json_buf: BTreeMap::new(),
             bundle_out: String::new(),
@@ -73,7 +67,7 @@ impl DocumentWizardPanel {
         self.wizard = None;
         self.mode = WizardPanelMode::EditDocs;
         self.section_index = 0;
-        self.phase = WizardStepPhase::Text;
+        self.phase = dw::WizardStepPhase::Text;
         self.input_buf.clear();
         self.json_buf.clear();
         self.bundle_out.clear();
@@ -337,21 +331,22 @@ impl DocumentWizardPanel {
             }
 
             WizardStepPhase::Text => {
-                let Some(section) = current_section(wiz, *section_index) else {
+                let Ok(section) = dw::current_section(wiz, *section_index) else {
                     ui.label("(No section.)");
                     return;
                 };
                 ui_section_text(ui, &doc_label, section);
             }
             WizardStepPhase::Translation => {
-                let Some(section) = current_section(wiz, *section_index) else {
+                let Ok(section) = dw::current_section(wiz, *section_index) else {
                     ui.label("(No section.)");
                     return;
                 };
                 ui_section_translation(ui, &doc_label, section);
             }
             WizardStepPhase::Inputs => {
-                let specs = current_section(wiz, *section_index)
+                let specs = dw::current_section(wiz, *section_index)
+                    .ok()
                     .and_then(|s| s.inputs_spec.clone())
                     .unwrap_or_default();
 
@@ -388,7 +383,8 @@ impl DocumentWizardPanel {
 
                     if ui.add_enabled(can_next, next_btn).clicked() {
                         if *phase == WizardStepPhase::Inputs {
-                            let specs = current_section(wiz, *section_index)
+                            let specs = dw::current_section(wiz, *section_index)
+                                .ok()
                                 .and_then(|s| s.inputs_spec.clone())
                                 .unwrap_or_default();
 
@@ -553,218 +549,6 @@ impl DocumentWizardPanel {
                 }
             }
         }
-    }
-}
-
-fn all_docs_have_no_template_errors(wiz: &dw::WizardState) -> bool {
-    wiz.docs.iter().all(|d| d.template_errors.is_empty())
-}
-
-fn current_section<'a>(
-    wiz: &'a dw::WizardState,
-    section_index: usize,
-) -> Option<&'a sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate> {
-    wiz.docs
-        .get(wiz.doc_index)
-        .and_then(|d| d.sections.get(section_index))
-}
-
-fn section_has_translation(
-    s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
-) -> bool {
-    s.translation
-        .as_ref()
-        .map(|t| !t.text.trim().is_empty())
-        .unwrap_or(false)
-}
-
-fn section_has_inputs(
-    s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
-) -> bool {
-    s.inputs_spec
-        .as_ref()
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
-}
-fn step_next(
-    wiz: &mut dw::WizardState,
-    section_index: &mut usize,
-    phase: &mut WizardStepPhase,
-) -> Result<(), dw::WizardError> {
-    // About step: just move into the normal section flow (or skip doc if no sections).
-    if matches!(*phase, WizardStepPhase::About) {
-        let has_sections = wiz
-            .docs
-            .get(wiz.doc_index)
-            .map(|d| !d.sections.is_empty())
-            .unwrap_or(false);
-
-        if has_sections {
-            *phase = WizardStepPhase::Text;
-        } else {
-            // edge case: doc has about but no sections
-            advance_to_next_section_or_doc(wiz, section_index, phase)?;
-        }
-        return Ok(());
-    }
-
-    // From here on, we can safely immutably borrow doc/section.
-    let Some(doc) = wiz.docs.get(wiz.doc_index) else {
-        return Ok(());
-    };
-
-    let Some(sec) = doc.sections.get(*section_index) else {
-        return Ok(());
-    };
-
-    match *phase {
-        WizardStepPhase::Text => {
-            if section_has_translation(sec) {
-                *phase = WizardStepPhase::Translation;
-            } else if section_has_inputs(sec) {
-                *phase = WizardStepPhase::Inputs;
-            } else {
-                // no translation + no inputs: advance section/doc
-                advance_to_next_section_or_doc(wiz, section_index, phase)?;
-            }
-        }
-        WizardStepPhase::Translation => {
-            if section_has_inputs(sec) {
-                *phase = WizardStepPhase::Inputs;
-            } else {
-                advance_to_next_section_or_doc(wiz, section_index, phase)?;
-            }
-        }
-        WizardStepPhase::Inputs => {
-            advance_to_next_section_or_doc(wiz, section_index, phase)?;
-        }
-
-        // Should be unreachable because About returns above, but keeps match exhaustive and future-proof.
-        WizardStepPhase::About => {}
-    }
-
-    Ok(())
-}
-
-fn advance_to_next_section_or_doc(
-    wiz: &mut dw::WizardState,
-    section_index: &mut usize,
-    phase: &mut WizardStepPhase,
-) -> Result<(), dw::WizardError> {
-    let doc_section_count = wiz
-        .docs
-        .get(wiz.doc_index)
-        .map(|d| d.sections.len())
-        .unwrap_or(0);
-
-    if doc_section_count > 0 && *section_index + 1 < doc_section_count {
-        *section_index += 1;
-        *phase = WizardStepPhase::Text;
-        return Ok(());
-    }
-
-    // next doc
-    if wiz.doc_index + 1 < wiz.docs.len() {
-        dw::advance_doc(wiz)?;
-        *section_index = 0;
-        *phase = if doc_has_about(wiz) {
-            WizardStepPhase::About
-        } else {
-            WizardStepPhase::Text
-        };
-    }
-
-    Ok(())
-}
-
-fn step_back(
-    wiz: &mut dw::WizardState,
-    section_index: &mut usize,
-    phase: &mut WizardStepPhase,
-) -> Result<(), dw::WizardError> {
-    // About step: back to previous doc end (or no-op if already at first doc).
-    if matches!(*phase, WizardStepPhase::About) {
-        back_to_prev_section_or_doc(wiz, section_index, phase)?;
-        return Ok(());
-    }
-
-    // If we're at the first section text and this doc has About, go back to About.
-    if matches!(*phase, WizardStepPhase::Text) && *section_index == 0 && doc_has_about(wiz) {
-        *phase = WizardStepPhase::About;
-        return Ok(());
-    }
-
-    // From here on, only Translation/Inputs need to look at the current section.
-    let Some(doc) = wiz.docs.get(wiz.doc_index) else {
-        return Ok(());
-    };
-    let Some(sec) = doc.sections.get(*section_index) else {
-        return Ok(());
-    };
-
-    match *phase {
-        WizardStepPhase::Inputs => {
-            if section_has_translation(sec) {
-                *phase = WizardStepPhase::Translation;
-            } else {
-                *phase = WizardStepPhase::Text;
-            }
-        }
-        WizardStepPhase::Translation => {
-            *phase = WizardStepPhase::Text;
-        }
-        WizardStepPhase::Text => {
-            back_to_prev_section_or_doc(wiz, section_index, phase)?;
-        }
-
-        // Unreachable due to early return above, but keeps the match exhaustive.
-        WizardStepPhase::About => {}
-    }
-
-    Ok(())
-}
-
-fn back_to_prev_section_or_doc(
-    wiz: &mut dw::WizardState,
-    section_index: &mut usize,
-    phase: &mut WizardStepPhase,
-) -> Result<(), dw::WizardError> {
-    if *section_index > 0 {
-        *section_index -= 1;
-        set_phase_to_last_step_in_section(wiz, *section_index, phase);
-        return Ok(());
-    }
-
-    if wiz.doc_index > 0 {
-        dw::back_doc(wiz)?;
-        let sc = wiz
-            .docs
-            .get(wiz.doc_index)
-            .map(|d| d.sections.len())
-            .unwrap_or(0);
-        *section_index = sc.saturating_sub(1);
-        set_phase_to_last_step_in_section(wiz, *section_index, phase);
-    }
-
-    Ok(())
-}
-
-fn set_phase_to_last_step_in_section(
-    wiz: &dw::WizardState,
-    section_index: usize,
-    phase: &mut WizardStepPhase,
-) {
-    let Some(sec) = current_section(wiz, section_index) else {
-        *phase = WizardStepPhase::Text;
-        return;
-    };
-
-    if section_has_inputs(sec) {
-        *phase = WizardStepPhase::Inputs;
-    } else if section_has_translation(sec) {
-        *phase = WizardStepPhase::Translation;
-    } else {
-        *phase = WizardStepPhase::Text;
     }
 }
 
@@ -1177,20 +961,4 @@ fn current_value_json_pretty(wiz: &dw::WizardState, key: &str) -> String {
         return String::new();
     };
     serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
-}
-
-fn doc_has_about(wiz: &dw::WizardState) -> bool {
-    wiz.docs
-        .get(wiz.doc_index)
-        .and_then(|d| d.doc_about.as_ref())
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
-}
-
-fn current_doc_about(wiz: &dw::WizardState) -> Option<&str> {
-    wiz.docs
-        .get(wiz.doc_index)
-        .and_then(|d| d.doc_about.as_deref())
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
 }

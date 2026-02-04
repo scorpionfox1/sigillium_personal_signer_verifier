@@ -26,6 +26,14 @@ pub struct WizardState {
     pub doc_index: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WizardStepPhase {
+    About,
+    Text,
+    Translation,
+    Inputs,
+}
+
 #[derive(Debug, Clone)]
 pub struct DocRunState {
     pub doc_identity: crate::template::doc_wizard::DocIdentity,
