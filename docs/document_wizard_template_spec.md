@@ -144,6 +144,7 @@ The wizard produces:
   "canonical_id": "{{~assoc_key_id}}",
   "docs": [
     {
+      "doc_identity": { "id": "...", "label": "...", "ver": "..." },
       "doc_hash": { "hash": "...", "algo": "sha256" },
       "doc_inputs": { /* key -> JSON value */ }
     }

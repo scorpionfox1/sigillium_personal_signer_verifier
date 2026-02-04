@@ -196,6 +196,11 @@ pub fn build_doc_bundle(state: &WizardState) -> Result<JsonValue, WizardError> {
     for d in state.docs.iter() {
         let mut doc_obj = JsonMap::new();
 
+        doc_obj.insert(
+            "doc_identity".to_string(),
+            serde_json::to_value(&d.doc_identity).expect("doc_identity to_value"),
+        );
+
         let mut hash_obj = JsonMap::new();
         hash_obj.insert(
             "hash".to_string(),

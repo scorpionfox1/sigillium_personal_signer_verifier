@@ -210,6 +210,20 @@ fn document_wizard_basic_flow_builds_bundle() {
     let docs = bundle["docs"].as_array().expect("docs array");
     assert_eq!(docs.len(), 3);
 
+    // Doc identities are present
+    assert_eq!(
+        docs[0]["doc_identity"]["id"].as_str().unwrap(),
+        "acknowledgement"
+    );
+    assert_eq!(
+        docs[1]["doc_identity"]["id"].as_str().unwrap(),
+        "latin_attestation"
+    );
+    assert_eq!(
+        docs[2]["doc_identity"]["id"].as_str().unwrap(),
+        "declarant_information"
+    );
+
     // Doc 3 inputs present
     let inputs3 = docs[2]["doc_inputs"].as_object().expect("doc_inputs obj");
     assert_eq!(inputs3["role"].as_str().unwrap(), "member");
