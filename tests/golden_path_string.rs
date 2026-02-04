@@ -62,13 +62,13 @@ fn golden_path_string_two_keys_sign_verify_and_remove() {
 
     // Sign with key 1
     command::select_active_key(key1_id, &state, &ctx).unwrap();
-    let sig = command::sign_payload(MSG, SignVerifyMode::Text, None, &state, None).unwrap();
+    let sig = command::sign_message(MSG, SignVerifyMode::Text, None, &state, None).unwrap();
 
     // Verify with key 2 pubkey (fail)
-    let ok = command::verify_payload(&pub2_hex, MSG, &sig, SignVerifyMode::Text, None).unwrap();
+    let ok = command::verify_message(&pub2_hex, MSG, &sig, SignVerifyMode::Text, None).unwrap();
     assert!(!ok);
 
     // Verify with key 1 pubkey (pass)
-    let ok = command::verify_payload(&pub1_hex, MSG, &sig, SignVerifyMode::Text, None).unwrap();
+    let ok = command::verify_message(&pub1_hex, MSG, &sig, SignVerifyMode::Text, None).unwrap();
     assert!(ok);
 }

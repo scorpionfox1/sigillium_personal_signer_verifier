@@ -19,7 +19,7 @@ use super::json_ops;
 // signing / verifying
 // ======================================================
 
-pub fn sign_payload(
+pub fn sign_message(
     msg: &str,
     sign_verify_mode: SignVerifyMode,
     schema_json: Option<&str>,
@@ -27,14 +27,14 @@ pub fn sign_payload(
     config_json: Option<&str>,
 ) -> AppResult<String> {
     if msg.is_empty() {
-        return Err(AppError::EmptyPayload);
+        return Err(AppError::EmptyMessage);
     }
 
     // bytes we will sign
     let msg_bytes = Zeroizing::new(msg.as_bytes().to_vec());
 
     // What we sign:
-    let (to_sign, payload_json_for_record): (Zeroizing<Vec<u8>>, Option<Value>) =
+    let (to_sign, message_json_for_record): (Zeroizing<Vec<u8>>, Option<Value>) =
         match sign_verify_mode {
             SignVerifyMode::Text => (Zeroizing::new((*msg_bytes).clone()), None),
 
@@ -96,7 +96,7 @@ pub fn sign_payload(
     let record_value = create_signature_record(
         &config,
         msg,
-        payload_json_for_record.as_ref(),
+        message_json_for_record.as_ref(),
         &sig_base64,
         &pub_key_hex,
         active_associated_key_id,
@@ -108,7 +108,7 @@ pub fn sign_payload(
     )?)
 }
 
-pub fn verify_payload(
+pub fn verify_message(
     public_key_hex: &str,
     msg: &str,
     signature_b64: &str,
@@ -116,7 +116,7 @@ pub fn verify_payload(
     schema_json: Option<&str>,
 ) -> AppResult<bool> {
     if msg.is_empty() {
-        return Err(AppError::EmptyPayload);
+        return Err(AppError::EmptyMessage);
     }
 
     // --- message preparation ---
@@ -157,12 +157,12 @@ pub fn verify_payload(
     crypto::verify_message(&pk, &to_verify, &sig)
 }
 
-pub fn replace_tags(payload: &str, assoc_key_id: &str) -> String {
+pub fn replace_tags(message: &str, assoc_key_id: &str) -> String {
     let mut replacements = HashMap::new();
     replacements.insert(TAG_ASSOC_KEY_ID.to_string(), assoc_key_id.to_string());
     replacements.insert(TAG_SIGNED_UTC.to_string(), Utc::now().to_rfc3339());
 
-    let mut result = payload.to_string();
+    let mut result = message.to_string();
     for (tag, value) in replacements {
         result = result.replace(&tag, &value);
     }
@@ -171,8 +171,8 @@ pub fn replace_tags(payload: &str, assoc_key_id: &str) -> String {
 
 fn create_signature_record(
     config: &Value,
-    payload_text: &str,
-    payload_json: Option<&Value>,
+    message_text: &str,
+    message_json: Option<&Value>,
     signature: &str,
     pub_key: &str,
     assoc_key_id: Option<String>,
@@ -180,9 +180,9 @@ fn create_signature_record(
     let mut record = serde_json::Map::new();
 
     // Always-included fields (with optional rename)
-    // (support both "payload_name" (UI) and the older "msg_name")
-    let payload_name = config
-        .get("payload_name")
+    // (support both "message_name" (UI) and the older "msg_name")
+    let message_name = config
+        .get("message_name")
         .and_then(|v| v.as_str())
         .or_else(|| config.get("msg_name").and_then(|v| v.as_str()))
         .filter(|s| !s.trim().is_empty())
@@ -201,12 +201,12 @@ fn create_signature_record(
         .unwrap_or("pub_key");
 
     // <-- key change: if JSON mode, embed as structured JSON value
-    if let Some(v) = payload_json {
-        record.insert(payload_name.to_string(), v.clone());
+    if let Some(v) = message_json {
+        record.insert(message_name.to_string(), v.clone());
     } else {
         record.insert(
-            payload_name.to_string(),
-            Value::String(payload_text.to_string()),
+            message_name.to_string(),
+            Value::String(message_text.to_string()),
         );
     }
 
@@ -295,20 +295,20 @@ mod tests {
     }
 
     #[test]
-    fn sign_payload_rejects_empty_payload() {
+    fn sign_message_rejects_empty_message() {
         let state = mk_state_with_active_private([1u8; 32]);
-        let err = sign_payload("", SignVerifyMode::Text, None, &state, None).unwrap_err();
-        assert!(matches!(err, AppError::EmptyPayload));
+        let err = sign_message("", SignVerifyMode::Text, None, &state, None).unwrap_err();
+        assert!(matches!(err, AppError::EmptyMessage));
     }
 
     #[test]
-    fn verify_payload_rejects_empty_payload() {
-        let err = verify_payload("00", "", "AA==", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::EmptyPayload));
+    fn verify_message_rejects_empty_message() {
+        let err = verify_message("00", "", "AA==", SignVerifyMode::Text, None).unwrap_err();
+        assert!(matches!(err, AppError::EmptyMessage));
     }
 
     #[test]
-    fn sign_payload_errors_when_locked_or_no_active_key() {
+    fn sign_message_errors_when_locked_or_no_active_key() {
         let td = tempfile::tempdir().expect("tempdir");
         let state = AppState::new_for_tests(td.path()).expect("new_for_tests");
 
@@ -326,7 +326,7 @@ mod tests {
             *sec = None;
         }
 
-        let err = sign_payload("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
+        let err = sign_message("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
         match err {
             AppError::Msg(s) => assert_eq!(s, AppError::AppLocked.to_string()),
             other => panic!("expected AppError::Msg(AppLocked), got {other:?}"),
@@ -346,7 +346,7 @@ mod tests {
             });
         }
 
-        let err = sign_payload("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
+        let err = sign_message("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
         match err {
             AppError::Msg(s) => assert_eq!(s, AppError::NoActiveKeySelected.to_string()),
             other => panic!("expected AppError::Msg(NoActiveKeySelected), got {other:?}"),
@@ -366,10 +366,10 @@ mod tests {
         let state = mk_state_with_active_private(privk);
 
         let msg = "hello sigillium";
-        let sig_b64 = sign_payload(msg, SignVerifyMode::Text, None, &state, None).expect("sign");
+        let sig_b64 = sign_message(msg, SignVerifyMode::Text, None, &state, None).expect("sign");
 
         let ok =
-            verify_payload(&pubk_hex, msg, &sig_b64, SignVerifyMode::Text, None).expect("verify");
+            verify_message(&pubk_hex, msg, &sig_b64, SignVerifyMode::Text, None).expect("verify");
         assert!(ok);
     }
 
@@ -388,14 +388,14 @@ mod tests {
         let msg1 = r#"{ "a": 1, "b": 2 }"#;
         let msg2 = r#"{ "b": 2, "a": 1 }"#;
 
-        let sig_b64 = sign_payload(msg1, SignVerifyMode::Json, None, &state, None).expect("sign");
+        let sig_b64 = sign_message(msg1, SignVerifyMode::Json, None, &state, None).expect("sign");
         let ok =
-            verify_payload(&pubk_hex, msg2, &sig_b64, SignVerifyMode::Json, None).expect("verify");
+            verify_message(&pubk_hex, msg2, &sig_b64, SignVerifyMode::Json, None).expect("verify");
         assert!(ok);
     }
 
     #[test]
-    fn sign_payload_record_mode_returns_json_object() {
+    fn sign_message_record_mode_returns_json_object() {
         let privk = crypto::derive_private_key_from_mnemonic_and_domain(
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "example.com",
@@ -409,7 +409,7 @@ mod tests {
         }
 
         let out =
-            sign_payload("hello", SignVerifyMode::Text, None, &state, Some("{}")).expect("record");
+            sign_message("hello", SignVerifyMode::Text, None, &state, Some("{}")).expect("record");
 
         let v: Value = serde_json::from_str(&out).expect("json");
         let obj = v.as_object().expect("object");
@@ -421,11 +421,11 @@ mod tests {
 
     #[test]
     fn test_replace_tags() {
-        let original_payload =
+        let original_message =
             "The key id is {{~assoc_key_id}} and the timestamp is {{~signed_utc}}.";
         let assoc_key_id = "test_key_id";
 
-        let result = replace_tags(original_payload, assoc_key_id);
+        let result = replace_tags(original_message, assoc_key_id);
 
         assert!(result.contains("The key id is test_key_id"));
 
@@ -436,11 +436,11 @@ mod tests {
 
     #[test]
     fn verify_rejects_invalid_public_key_hex_and_lengths() {
-        let err = verify_payload("zz", "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
+        let err = verify_message("zz", "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
         assert!(matches!(err, AppError::InvalidPublicKeyHex));
 
         let pk31 = hex::encode([0u8; 31]);
-        let err = verify_payload(&pk31, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
+        let err = verify_message(&pk31, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
         assert!(matches!(err, AppError::InvalidPublicKeyLength));
     }
 
@@ -448,10 +448,10 @@ mod tests {
     fn verify_rejects_invalid_signature_base64_and_lengths() {
         let pk = hex::encode([0u8; 32]);
 
-        let err = verify_payload(&pk, "hi", "!!!!", SignVerifyMode::Text, None).unwrap_err();
+        let err = verify_message(&pk, "hi", "!!!!", SignVerifyMode::Text, None).unwrap_err();
         assert!(matches!(err, AppError::InvalidSignatureBase64));
 
-        let err = verify_payload(&pk, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
+        let err = verify_message(&pk, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
         assert!(matches!(err, AppError::InvalidSignatureLength));
     }
 
@@ -476,13 +476,13 @@ mod tests {
         }
 
         // No config -> assoc not included
-        let out1 = sign_payload("hello", SignVerifyMode::Text, None, &state, None).unwrap();
+        let out1 = sign_message("hello", SignVerifyMode::Text, None, &state, None).unwrap();
         let v1: Value = serde_json::from_str(&out1).unwrap();
         let obj1 = v1.as_object().unwrap();
         assert!(obj1.get("assoc_key_id").is_none());
 
         // Config contains assoc_key_id_name but value unusable -> should include with default name
-        let out2 = sign_payload(
+        let out2 = sign_message(
             "hello",
             SignVerifyMode::Text,
             None,
@@ -498,7 +498,7 @@ mod tests {
         );
 
         // Config provides usable custom name -> should include under that name
-        let out3 = sign_payload(
+        let out3 = sign_message(
             "hello",
             SignVerifyMode::Text,
             None,

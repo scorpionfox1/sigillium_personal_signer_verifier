@@ -54,7 +54,7 @@ pub enum AppError {
     // --------------------------------------------------
     // input / validation
     // --------------------------------------------------
-    EmptyPayload,
+    EmptyMessage,
     EmptyMnemonic,
     InvalidMnemonic,
     EmptyLabel,
@@ -174,7 +174,7 @@ impl AppError {
             KeyfileFsIntentSerializeFailed(_) => "Failed to prepare keyfile operation.",
 
             // input
-            EmptyPayload => "Payload is required.",
+            EmptyMessage => "Message is required.",
             EmptyMnemonic => "Mnemonic is required.",
             InvalidMnemonic => "Invalid mnemonic.",
             EmptyLabel => "Label is required.",
@@ -300,7 +300,7 @@ impl fmt::Display for AppError {
             KeyfileFsRemoveFailed(s) => write!(f, "keyfile remove failed: {s}"),
             KeyfileFsIntentSerializeFailed(s) => write!(f, "keyfile intent serialize failed: {s}"),
 
-            EmptyPayload => write!(f, "empty payload"),
+            EmptyMessage => write!(f, "empty message"),
             EmptyMnemonic => write!(f, "empty mnemonic"),
             InvalidMnemonic => write!(f, "invalid mnemonic"),
             EmptyLabel => write!(f, "empty label"),

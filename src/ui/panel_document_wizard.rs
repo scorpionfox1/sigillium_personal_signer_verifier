@@ -1,7 +1,7 @@
 // src/ui/panel_document_wizard.rs
 
 use crate::ui::message::PanelMsgState;
-use crate::ui::widgets::{self, ui_notice};
+use crate::ui::widgets::ui_notice;
 use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
@@ -430,7 +430,7 @@ impl DocumentWizardPanel {
         let can_build = all_docs_have_no_template_errors(wiz);
         if can_build && bundle_out.trim().is_empty() && !*bundle_build_attempted {
             *bundle_build_attempted = true;
-            match dw::build_json_bundle(wiz) {
+            match dw::build_doc_bundle(wiz) {
                 Ok(v) => match serde_json::to_string_pretty(&v) {
                     Ok(s) => {
                         *bundle_out = s;
@@ -452,7 +452,7 @@ impl DocumentWizardPanel {
 
             let can_sign_bundle = !bundle_out.trim().is_empty();
             if ui
-                .add_enabled(can_sign_bundle, egui::Button::new("Sign Doc Bundle"))
+                .add_enabled(can_sign_bundle, egui::Button::new("Sign Document Bundle"))
                 .clicked()
             {
                 *route_prefill = Some(RoutePrefill::ToSign {
@@ -513,20 +513,12 @@ impl DocumentWizardPanel {
         ui.add_space(6.0);
 
         ui.group(|ui| {
-            ui.label("The JSON bundle below represents one or more documents.");
+            ui.label("The document bundle below represents one or more documents.");
             ui.label("It includes, for each document: (1) the raw document text hash, (2) the collected inputs, and (3) tags that will be replaced at signing time.");
             ui.label("Those signing-time tags will be replaced with the signing UTC datetime and the associated key id for the key you sign with.");
         });
 
         ui.add_space(6.0);
-
-        ui.horizontal(|ui| {
-            ui.label("Bundle JSON (sign this):");
-
-            if widgets::copy_icon_button(ui, !bundle_out.trim().is_empty(), "Copy bundle JSON") {
-                ui.ctx().copy_text(bundle_out.clone());
-            }
-        });
 
         ui.add(
             egui::TextEdit::multiline(bundle_out)
@@ -538,7 +530,7 @@ impl DocumentWizardPanel {
         ui.separator();
         ui.add_space(6.0);
 
-        if ui.button("Copy Raw Document Text to Clipboard").clicked() {
+        if ui.button("Copy Document Bundle to Clipboard").clicked() {
             match wiz.docs.get(wiz.doc_index) {
                 Some(d) => {
                     let raw = sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections(

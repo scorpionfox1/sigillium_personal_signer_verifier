@@ -17,7 +17,7 @@ use super::{message::PanelMsgState, widgets};
 pub struct VerifyPanel {
     pubkey_hex: String,
     signature_b64: String,
-    payload: String,
+    message: String,
     msg: PanelMsgState,
 }
 
@@ -26,13 +26,13 @@ impl VerifyPanel {
         Self {
             pubkey_hex: String::new(),
             signature_b64: String::new(),
-            payload: String::new(),
+            message: String::new(),
             msg: PanelMsgState::default(),
         }
     }
 
-    pub fn apply_prefill(&mut self, payload: String, signature_b64: String) {
-        self.payload = payload;
+    pub fn apply_prefill(&mut self, message: String, signature_b64: String) {
+        self.message = message;
         self.signature_b64 = signature_b64;
         self.msg.clear();
     }
@@ -44,7 +44,7 @@ impl VerifyPanel {
     pub fn reset_inputs(&mut self) {
         self.pubkey_hex.clear();
         self.signature_b64.clear();
-        self.payload.clear();
+        self.message.clear();
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
@@ -87,7 +87,7 @@ impl VerifyPanel {
                     if let Ok(mut g) = state.sign_verify_mode.lock() {
                         *g = mode;
                     }
-                    self.payload.clear();
+                    self.message.clear();
                     self.msg.clear();
                 }
 
@@ -134,15 +134,17 @@ impl VerifyPanel {
                 ui.add_space(10.0);
 
                 ui.label(match mode {
-                    SignVerifyMode::Text => "Message",
-                    SignVerifyMode::Json => "JSON payload",
+                    SignVerifyMode::Text => "String Message",
+                    SignVerifyMode::Json => "JSON Message",
                 });
                 ui.add(
-                    egui::TextEdit::multiline(&mut self.payload)
+                    egui::TextEdit::multiline(&mut self.message)
                         .desired_rows(12)
                         .hint_text(match mode {
-                            SignVerifyMode::Text => "Paste the exact message that was signed…",
-                            SignVerifyMode::Json => "Paste the exact JSON payload that was signed…",
+                            SignVerifyMode::Text => {
+                                "Paste the exact string message that was signed…"
+                            }
+                            SignVerifyMode::Json => "Paste the exact JSON message that was signed…",
                         }),
                 );
 
@@ -199,9 +201,9 @@ impl VerifyPanel {
                             return;
                         }
 
-                        let payload = self.payload.trim();
-                        if payload.is_empty() {
-                            self.msg.set_error("Empty payload not allowed");
+                        let message = self.message.trim();
+                        if message.is_empty() {
+                            self.msg.set_error("Empty message not allowed");
                             return;
                         }
 
@@ -211,7 +213,7 @@ impl VerifyPanel {
                             .map(|g| *g)
                             .unwrap_or(SignVerifyMode::Text);
 
-                        match command::verify_payload(pk_hex, payload, sig_b64, mode, None) {
+                        match command::verify_message(pk_hex, message, sig_b64, mode, None) {
                             Ok(true) => self.msg.set_info("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),
                             Err(e) => {
@@ -227,7 +229,7 @@ impl VerifyPanel {
                     if ui.button("Clear fields").clicked() {
                         self.pubkey_hex.clear();
                         self.signature_b64.clear();
-                        self.payload.clear();
+                        self.message.clear();
                         self.msg.clear();
                     }
                 });

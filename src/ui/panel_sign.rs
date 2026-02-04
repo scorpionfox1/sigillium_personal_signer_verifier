@@ -204,7 +204,7 @@ impl SignPanel {
                                     .desired_rows(6)
                                     .hint_text(
 r#"{ 
-  "payload_name": "payload",
+  "message_name": "message",
   "signature_name": "signature",
   "pub_key_name": "pub_key",
   "assoc_key_id_name": "assoc_key_id"
@@ -257,7 +257,7 @@ r#"{
                             None
                         };
 
-                        match command::sign_payload(
+                        match command::sign_message(
                             self.message.trim(),
                             sign_mode,
                             schema_opt,

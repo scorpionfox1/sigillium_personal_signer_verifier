@@ -17,7 +17,7 @@ pub use json_ops::validate_json_2020_12;
 pub use keyfile_lifecycle::create_keyfile;
 pub use keyfile_mutation::{change_passphrase, install_key, uninstall_active_key};
 pub use session::{clear_active_key, get_status, select_active_key, unlock_app};
-pub use sign_verify::{sign_payload, verify_payload};
+pub use sign_verify::{sign_message, verify_message};
 
 // --- Shared helpers (kept private to the command module) ---
 

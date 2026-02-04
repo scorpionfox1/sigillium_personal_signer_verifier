@@ -254,8 +254,8 @@ mod tests {
 
         // KEYFILE_MAX_BYTES is 1 MiB in the module under test.
         let too_big = (1 * 1024 * 1024) + 1;
-        let payload = "x".repeat(too_big);
-        fs::write(&path, payload).unwrap();
+        let message = "x".repeat(too_big);
+        fs::write(&path, message).unwrap();
 
         let err = read_json(&path).unwrap_err();
         assert!(matches!(err, AppError::KeyfileFsTooLarge { .. }));

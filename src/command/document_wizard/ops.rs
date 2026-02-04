@@ -173,12 +173,12 @@ pub fn set_input_json_from_str_current_doc(
     set_input_value_current_doc(state, key, v)
 }
 
-pub fn build_json_bundle(state: &WizardState) -> Result<JsonValue, WizardError> {
+pub fn build_doc_bundle(state: &WizardState) -> Result<JsonValue, WizardError> {
     // Ensure everything is valid before building.
     for (i, d) in state.docs.iter().enumerate() {
         if !d.template_errors.is_empty() {
             return Err(WizardError::TemplateProblem(format!(
-                "cannot build bundle: doc[{}] '{}' has template errors: {}",
+                "cannot build document bundle: doc[{}] '{}' has template errors: {}",
                 i,
                 d.doc_identity.label,
                 d.template_errors.join(" | ")
@@ -195,11 +195,6 @@ pub fn build_json_bundle(state: &WizardState) -> Result<JsonValue, WizardError> 
 
     for d in state.docs.iter() {
         let mut doc_obj = JsonMap::new();
-
-        doc_obj.insert(
-            "doc_identity".to_string(),
-            serde_json::to_value(&d.doc_identity).expect("doc_identity to_value"),
-        );
 
         let mut hash_obj = JsonMap::new();
         hash_obj.insert(
@@ -327,7 +322,7 @@ mod tests {
         // Input type is string, so JSON string value is correct:
         set_input_json_from_str_current_doc(&mut state, "name", "\"World\"").unwrap();
 
-        let bundle = build_json_bundle(&state).unwrap();
+        let bundle = build_doc_bundle(&state).unwrap();
         let docs = bundle["docs"].as_array().expect("docs array");
         assert_eq!(docs.len(), 1);
 
