@@ -1,7 +1,7 @@
 // src/ui/panel_document_wizard.rs
 
 use crate::ui::message::PanelMsgState;
-use crate::ui::widgets::ui_notice;
+use crate::ui::widgets::{self, ui_notice};
 use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
@@ -519,8 +519,7 @@ impl DocumentWizardPanel {
         ui.horizontal(|ui| {
             ui.label("Bundle JSON (sign this):");
 
-            let copy_btn = ui.small_button("⧉").on_hover_text("Copy bundle JSON");
-            if copy_btn.clicked() {
+            if widgets::copy_icon_button(ui, !bundle_out.trim().is_empty(), "Copy bundle JSON") {
                 ui.ctx().copy_text(bundle_out.clone());
             }
         });
@@ -859,24 +858,7 @@ fn ui_section_inputs(
                                         );
 
                                         if resp.changed() {
-                                            let s = buf.trim();
-                                            if s.is_empty() {
-                                                // Treat empty as "clear"
-                                                if let Err(e) = dw::set_input_value_current_doc(
-                                                    wiz,
-                                                    &key,
-                                                    JsonValue::Null,
-                                                ) {
-                                                    msg.set_warn(&format!("{e}"));
-                                                }
-                                            } else {
-                                                match dw::set_input_json_from_str_current_doc(
-                                                    wiz, &key, buf,
-                                                ) {
-                                                    Ok(()) => msg.clear(),
-                                                    Err(e) => msg.set_warn(&format!("{e}")),
-                                                }
-                                            }
+                                            apply_json_buffer_change(msg, wiz, &key, buf);
                                         }
                                     });
 
@@ -902,24 +884,7 @@ fn ui_section_inputs(
                                 );
 
                                 if resp.changed() {
-                                    let s = buf.trim();
-                                    if s.is_empty() {
-                                        // Treat empty as "clear"
-                                        if let Err(e) = dw::set_input_value_current_doc(
-                                            wiz,
-                                            &key,
-                                            JsonValue::Null,
-                                        ) {
-                                            msg.set_warn(&format!("{e}"));
-                                        }
-                                    } else {
-                                        match dw::set_input_json_from_str_current_doc(
-                                            wiz, &key, buf,
-                                        ) {
-                                            Ok(()) => msg.clear(),
-                                            Err(e) => msg.set_warn(&format!("{e}")),
-                                        }
-                                    }
+                                    apply_json_buffer_change(msg, wiz, &key, buf);
                                 }
                             }
                         }
@@ -961,4 +926,24 @@ fn current_value_json_pretty(wiz: &dw::WizardState, key: &str) -> String {
         return String::new();
     };
     serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
+}
+
+fn apply_json_buffer_change(
+    msg: &mut PanelMsgState,
+    wiz: &mut dw::WizardState,
+    key: &str,
+    buf: &str,
+) {
+    let s = buf.trim();
+    if s.is_empty() {
+        // Treat empty as "clear"
+        if let Err(e) = dw::set_input_value_current_doc(wiz, key, JsonValue::Null) {
+            msg.set_warn(&format!("{e}"));
+        }
+    } else {
+        match dw::set_input_json_from_str_current_doc(wiz, key, buf) {
+            Ok(()) => msg.clear(),
+            Err(e) => msg.set_warn(&format!("{e}")),
+        }
+    }
 }

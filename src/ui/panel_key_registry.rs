@@ -99,58 +99,42 @@ impl KeyRegistryPanel {
                         ui.weak("Active key details");
                         ui.add_space(6.0);
 
-                        widgets::copy_label_with_button(
+                        copyable_readonly_field(
                             ui,
                             "Label",
                             active_label.as_str(),
                             "Copy label",
+                            None,
                         );
-
-                        let mut v = active_label.as_str().to_string();
-                        ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
 
                         ui.add_space(6.0);
 
-                        widgets::copy_label_with_button(
+                        copyable_readonly_field(
                             ui,
                             "Domain",
                             &active_domain,
                             "Copy domain",
+                            None,
                         );
-
-                        let mut v = active_domain.clone();
-                        ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
 
                         ui.add_space(6.0);
 
-                        widgets::copy_label_with_button(
+                        copyable_readonly_field(
                             ui,
                             "Associated ID",
                             &active_assoc_id,
                             "Copy associated ID",
-                        );
-
-                        let mut v = active_assoc_id.clone();
-                        ui.add(
-                            egui::TextEdit::singleline(&mut v)
-                                .interactive(false)
-                                .hint_text("—"),
+                        Some("—"),
                         );
 
                         ui.add_space(6.0);
 
-                        widgets::copy_label_with_button(
+                        copyable_readonly_field(
                             ui,
                             "Public key (hex)",
                             &active_pubkey_hex,
                             "Copy public key",
-                        );
-
-                        let mut v = active_pubkey_hex.clone();
-                        ui.add(
-                            egui::TextEdit::singleline(&mut v)
-                                .interactive(false)
-                                .hint_text("No active key"),
+                        Some("No active key"),
                         );
 
                         ui.add_space(6.0);
@@ -341,4 +325,20 @@ impl KeyRegistryPanel {
                 }
             });
     }
+}
+
+fn copyable_readonly_field(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &str,
+    hover: &str,
+    hint: Option<&str>,
+) {
+    widgets::copy_label_with_button(ui, label, value, hover);
+    let mut v = value.to_string();
+    let mut field = egui::TextEdit::singleline(&mut v).interactive(false);
+    if let Some(hint) = hint {
+        field = field.hint_text(hint);
+    }
+    ui.add(field);
 }

@@ -29,15 +29,12 @@ impl Drop for KeyfileLock {
 }
 
 pub(crate) fn acquire_keyfile_lock(keyfile_path: &Path) -> AppResult<KeyfileLock> {
-    let p = keyfile_path;
-    let parent = p
+    let lock_path = lock_path_for(keyfile_path)?;
+    let parent = lock_path
         .parent()
         .ok_or_else(|| AppError::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
 
     fs::create_dir_all(parent).map_err(|e| AppError::KeyfileFsLockFailed(e.to_string()))?;
-
-    let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("keyfile");
-    let lock_path = parent.join(format!(".sigillium-keyfile.{}.lock", fname));
 
     let mut opts = OpenOptions::new();
     opts.create_new(true).write(true);
@@ -185,6 +182,23 @@ fn lock_is_stale(lock_path: &Path) -> bool {
     }
 
     false
+}
+
+// ======================================================
+// Internal Helpers
+// ======================================================
+
+fn lock_path_for(keyfile_path: &Path) -> AppResult<PathBuf> {
+    let parent = keyfile_path
+        .parent()
+        .ok_or_else(|| AppError::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
+
+    let fname = keyfile_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("keyfile");
+
+    Ok(parent.join(format!(".sigillium-keyfile.{}.lock", fname)))
 }
 
 // ======================================================

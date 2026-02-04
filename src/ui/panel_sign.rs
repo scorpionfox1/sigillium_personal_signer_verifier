@@ -133,18 +133,12 @@ impl SignPanel {
 
                 ui.horizontal(|ui| {
                     ui.label("Output mode:");
-                    if ui
-                        .selectable_label(output_mode == SignOutputMode::Signature, "Signature")
-                        .clicked()
-                    {
-                        output_mode = SignOutputMode::Signature;
-                    }
-                    if ui
-                        .selectable_label(output_mode == SignOutputMode::Record, "Record")
-                        .clicked()
-                    {
-                        output_mode = SignOutputMode::Record;
-                    }
+                    ui.selectable_value(
+                        &mut output_mode,
+                        SignOutputMode::Signature,
+                        "Signature",
+                    );
+                    ui.selectable_value(&mut output_mode, SignOutputMode::Record, "Record");
                 });
 
                 if let Ok(mut g) = state.sign_output_mode.lock() {
@@ -162,18 +156,8 @@ impl SignPanel {
 
                 ui.horizontal(|ui| {
                     ui.label("Resolve tags mode:");
-                    if ui
-                        .selectable_label(resolve_tags_mode == true, "True")
-                        .clicked()
-                    {
-                        resolve_tags_mode = true;
-                    }
-                    if ui
-                        .selectable_label(resolve_tags_mode == false, "False")
-                        .clicked()
-                    {
-                        resolve_tags_mode = false;
-                    }
+                    ui.selectable_value(&mut resolve_tags_mode, true, "True");
+                    ui.selectable_value(&mut resolve_tags_mode, false, "False");
                 });
 
                 if let Ok(mut g) = state.sign_resolve_tag_mode.lock() {
@@ -185,13 +169,13 @@ impl SignPanel {
                 // ---- Message (left) + Schema/Config (right)
                 ui.columns(2, |cols| {
                     // LEFT: message
-                    widgets::copy_label_with_button(
-                        &mut cols[0],
-                        "Message",
-                        &self.message,
-                        "Copy message",
-                    );
-
+                    cols[0].horizontal(|ui| {
+                        ui.label("Message");
+                        let ok = !self.message.trim().is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy message") {
+                            ui.ctx().copy_text(self.message.clone());
+                        }
+                    });
 
                     cols[0].add(
                         egui::TextEdit::multiline(&mut self.message)
@@ -351,12 +335,13 @@ r#"{
                 };
 
                 ui.columns(2, |cols| {
-                    widgets::copy_label_with_button(
-                        &mut cols[0],
-                        left_label,
-                        &self.output_text,
-                        "Copy output",
-                    );
+                    cols[0].horizontal(|ui| {
+                        ui.label(left_label);
+                        let ok = !self.output_text.trim().is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy output") {
+                            ui.ctx().copy_text(self.output_text.clone());
+                        }
+                    });
 
                     cols[0].add(
                         egui::TextEdit::multiline(&mut self.output_text)
@@ -367,13 +352,13 @@ r#"{
 
                     cols[1].label("Active key");
 
-                    widgets::copy_label_with_button(
-                        &mut cols[1],
-                        "Public key (hex)",
-                        &active_pubkey_hex,
-                        "Copy public key",
-                    );
-
+                    cols[1].horizontal(|ui| {
+                        ui.label("Public key (hex)");
+                        let ok = !active_pubkey_hex.is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
+                            ui.ctx().copy_text(active_pubkey_hex.clone());
+                        }
+                    });
                     let mut pk = active_pubkey_hex.clone();
                     cols[1].add(
                         egui::TextEdit::singleline(&mut pk)
@@ -383,13 +368,13 @@ r#"{
 
                     cols[1].add_space(6.0);
 
-                    widgets::copy_label_with_button(
-                        &mut cols[1],
-                        "Associated ID",
-                        &active_assoc_id,
-                        "Copy associated ID",
-                    );
-
+                    cols[1].horizontal(|ui| {
+                        ui.label("Associated ID");
+                        let ok = !active_assoc_id.is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy associated ID") {
+                            ui.ctx().copy_text(active_assoc_id.clone());
+                        }
+                    });
                     let mut aid = active_assoc_id.clone();
                     cols[1].add(
                         egui::TextEdit::singleline(&mut aid)
