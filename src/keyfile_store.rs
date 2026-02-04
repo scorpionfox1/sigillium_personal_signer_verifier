@@ -69,18 +69,7 @@ impl KeyfileStore {
 pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
     let mut out = Vec::new();
 
-    if !keyfiles_root.exists() {
-        return Ok(out);
-    }
-
-    for entry in std::fs::read_dir(keyfiles_root)? {
-        let entry = entry?;
-        let dir = entry.path();
-
-        if !dir.is_dir() {
-            continue;
-        }
-
+    for dir in read_keyfile_dirs(keyfiles_root)? {
         // Tombstoned dirs are garbage-collected opportunistically.
         if dir.join(TOMBSTONE_FILE).exists() {
             destroy_keyfile_dir_best_effort(&dir);
@@ -88,7 +77,7 @@ pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
         }
 
         if dir.join(KEYFILE_FILENAME).is_file() {
-            if let Some(name) = dir.file_name().and_then(|s| s.to_str()) {
+            if let Some(name) = dir_name(&dir) {
                 out.push(name.to_string());
             }
         }
@@ -101,18 +90,8 @@ pub fn list_keyfiles(keyfiles_root: &Path) -> std::io::Result<Vec<String>> {
 pub fn list_keyfile_dirs(keyfiles_root: &Path) -> std::io::Result<Vec<KeyfileDirRow>> {
     let mut out = Vec::new();
 
-    if !keyfiles_root.exists() {
-        return Ok(out);
-    }
-
-    for entry in std::fs::read_dir(keyfiles_root)? {
-        let entry = entry?;
-        let dir = entry.path();
-        if !dir.is_dir() {
-            continue;
-        }
-
-        let Some(name) = dir.file_name().and_then(|s| s.to_str()) else {
+    for dir in read_keyfile_dirs(keyfiles_root)? {
+        let Some(name) = dir_name(&dir) else {
             continue;
         };
 
@@ -129,6 +108,22 @@ pub fn list_keyfile_dirs(keyfiles_root: &Path) -> std::io::Result<Vec<KeyfileDir
 
     out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
+}
+
+fn read_keyfile_dirs(keyfiles_root: &Path) -> std::io::Result<Vec<PathBuf>> {
+    if !keyfiles_root.exists() {
+        return Ok(Vec::new());
+    }
+
+    let dirs = std::fs::read_dir(keyfiles_root)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|dir| dir.is_dir())
+        .collect::<Vec<_>>();
+    Ok(dirs)
+}
+
+fn dir_name(dir: &Path) -> Option<&str> {
+    dir.file_name().and_then(|s| s.to_str())
 }
 
 fn validate_keyfile_dir_name(name: &str) -> Result<(), &'static str> {

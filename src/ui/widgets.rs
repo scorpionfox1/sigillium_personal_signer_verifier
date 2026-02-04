@@ -15,6 +15,19 @@ pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
         .clicked()
 }
 
+pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
+    let mut copied = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let ok = !value.trim().is_empty();
+        if copy_icon_button(ui, ok, hover) {
+            ui.ctx().copy_text(value.to_string());
+            copied = true;
+        }
+    });
+    copied
+}
+
 /// Standard Active Key selector used across panels.
 /// - Shows None + installed keys.
 /// - Selecting None clears active key.

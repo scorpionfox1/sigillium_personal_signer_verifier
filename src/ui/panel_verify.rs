@@ -100,14 +100,11 @@ impl VerifyPanel {
                         .map(|m| hex::encode(m.public_key))
                 });
 
-                ui.horizontal(|ui| {
+                if let Some(pk) = active_pubkey_hex.as_deref() {
+                    widgets::copy_label_with_button(ui, "Public key (hex)", pk, "Copy public key");
+                } else {
                     ui.label("Public key (hex)");
-                    if let Some(pk) = active_pubkey_hex.as_deref() {
-                        if widgets::copy_icon_button(ui, !pk.is_empty(), "Copy public key") {
-                            ui.ctx().copy_text(pk.to_string());
-                        }
-                    }
-                });
+                }
 
                 if let Some(pk) = active_pubkey_hex.as_deref() {
                     let mut s = pk.to_string();
@@ -121,13 +118,13 @@ impl VerifyPanel {
 
                 ui.add_space(10.0);
 
-                ui.horizontal(|ui| {
-                    ui.label("Signature (base64)");
-                    let sig = self.signature_b64.trim();
-                    if widgets::copy_icon_button(ui, !sig.is_empty(), "Copy signature") {
-                        ui.ctx().copy_text(sig.to_string());
-                    }
-                });
+                widgets::copy_label_with_button(
+                    ui,
+                    "Signature (base64)",
+                    &self.signature_b64,
+                    "Copy signature",
+                );
+
                 ui.add(
                     egui::TextEdit::multiline(&mut self.signature_b64)
                         .desired_rows(6)

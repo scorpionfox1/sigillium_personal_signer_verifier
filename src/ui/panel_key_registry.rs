@@ -99,37 +99,37 @@ impl KeyRegistryPanel {
                         ui.weak("Active key details");
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Label");
-                            let ok = !active_label.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy label") {
-                                ui.ctx().copy_text(active_label.as_str().to_string());
-                            }
-                        });
+                        widgets::copy_label_with_button(
+                            ui,
+                            "Label",
+                            active_label.as_str(),
+                            "Copy label",
+                        );
+
                         let mut v = active_label.as_str().to_string();
                         ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
 
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Domain");
-                            let ok = !active_domain.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy domain") {
-                                ui.ctx().copy_text(active_domain.clone());
-                            }
-                        });
+                        widgets::copy_label_with_button(
+                            ui,
+                            "Domain",
+                            &active_domain,
+                            "Copy domain",
+                        );
+
                         let mut v = active_domain.clone();
                         ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
 
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Associated ID");
-                            let ok = !active_assoc_id.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy associated ID") {
-                                ui.ctx().copy_text(active_assoc_id.clone());
-                            }
-                        });
+                        widgets::copy_label_with_button(
+                            ui,
+                            "Associated ID",
+                            &active_assoc_id,
+                            "Copy associated ID",
+                        );
+
                         let mut v = active_assoc_id.clone();
                         ui.add(
                             egui::TextEdit::singleline(&mut v)
@@ -139,13 +139,13 @@ impl KeyRegistryPanel {
 
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Public key (hex)");
-                            let ok = !active_pubkey_hex.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy public key") {
-                                ui.ctx().copy_text(active_pubkey_hex.clone());
-                            }
-                        });
+                        widgets::copy_label_with_button(
+                            ui,
+                            "Public key (hex)",
+                            &active_pubkey_hex,
+                            "Copy public key",
+                        );
+
                         let mut v = active_pubkey_hex.clone();
                         ui.add(
                             egui::TextEdit::singleline(&mut v)
