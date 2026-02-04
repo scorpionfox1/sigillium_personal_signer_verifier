@@ -150,6 +150,7 @@ A **document** is a structured JSON object representing a single human-readable 
 A document contains:
 - a hash of the document text and the algorithm used to produce that hash, and
 - an input object containing the values supplied for that document.
+- Also the document version information, which is a human readable convenience, but not semantically meaningful.
 
 The document text itself is not signed directly; its hash anchors the document’s content.
 
