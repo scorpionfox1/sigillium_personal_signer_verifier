@@ -26,9 +26,21 @@ pub struct WizardState {
     pub doc_index: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WizardStepPhase {
+    About,
+    Text,
+    Translation,
+    Inputs,
+}
+
 #[derive(Debug, Clone)]
 pub struct DocRunState {
     pub doc_identity: crate::template::doc_wizard::DocIdentity,
+
+    /// Optional UI-only intro shown in the wizard. Not part of signed material.
+    pub doc_about: Option<String>,
+
     pub sections: Vec<SectionTemplate>,
     pub expected_hash_hex: String,
     pub computed_hash_hex: String,

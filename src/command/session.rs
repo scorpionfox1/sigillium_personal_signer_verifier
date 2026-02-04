@@ -111,7 +111,7 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
         lock_app_inner_if_unlocked(state, "unlock_cleanup").map_err(AppError::Msg)?;
 
         let passphrase = Zeroizing::new(passphrase.to_owned());
-        super::validate_passphrase_for_unlock(&passphrase).map_err(AppError::Msg)?;
+        super::validate_passphrase_for_unlock(&passphrase)?;
 
         let keyfile_path = ctx
             .current_keyfile_path()

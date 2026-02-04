@@ -68,6 +68,7 @@ fn build_doc_run_state(doc: &DocTemplate) -> DocRunState {
 
     DocRunState {
         doc_identity: doc.doc_identity.clone(),
+        doc_about: doc.doc_about.clone(),
         sections: doc.sections.clone(),
         expected_hash_hex: doc.doc_hash.hash.clone(),
         computed_hash_hex,
@@ -172,12 +173,12 @@ pub fn set_input_json_from_str_current_doc(
     set_input_value_current_doc(state, key, v)
 }
 
-pub fn build_json_bundle(state: &WizardState) -> Result<JsonValue, WizardError> {
+pub fn build_doc_bundle(state: &WizardState) -> Result<JsonValue, WizardError> {
     // Ensure everything is valid before building.
     for (i, d) in state.docs.iter().enumerate() {
         if !d.template_errors.is_empty() {
             return Err(WizardError::TemplateProblem(format!(
-                "cannot build bundle: doc[{}] '{}' has template errors: {}",
+                "cannot build document bundle: doc[{}] '{}' has template errors: {}",
                 i,
                 d.doc_identity.label,
                 d.template_errors.join(" | ")
@@ -326,7 +327,7 @@ mod tests {
         // Input type is string, so JSON string value is correct:
         set_input_json_from_str_current_doc(&mut state, "name", "\"World\"").unwrap();
 
-        let bundle = build_json_bundle(&state).unwrap();
+        let bundle = build_doc_bundle(&state).unwrap();
         let docs = bundle["docs"].as_array().expect("docs array");
         assert_eq!(docs.len(), 1);
 

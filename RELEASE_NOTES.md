@@ -1,79 +1,59 @@
----
-
-## Release v0.6.1
+## Release v0.7.0
 
 ### Notes
 
-This release completes a long-planned cleanup of the UI error-handling model.
+This release focuses on **Document Wizard UX and flow**, **safer keyfile persistence and concurrency**, and continued **polish** in error handling and clipboard ergonomics.
 
 ---
 
-## Notable Changes
+### Notable Changes
 
-### Debug UI semantics removed
+#### Document Wizard: About step and improved flow
 
-- The legacy **debug UI mode** has been fully retired from error handling.
-- Error reporting no longer branches on a debug / non-debug distinction.
-- All application errors now surface with the same level of detail previously shown only when debug mode was enabled.
+- Added an optional per-document **About** screen (`doc_about`) shown before the document’s sections  
+  (UI-only; not signed or canonical).
+- Improved wizard navigation and layout:
+  - clearer page skeleton,
+  - navigation buttons placed below content,
+  - reduced visual clutter.
+- Document bundle produced by wizard no longer contains doc_identity object. Hash alone anchors document semantics.
+- Added **Copy Raw Document Text to Clipboard** at the end of the wizard.
+- Improved “Review & Build” behavior:
+  - bundle build attempts are tracked to avoid repeated rebuild churn,
+  - bundle can auto-build once eligible,
+  - clearer explanation of what the bundle contains.
+- Validation improvements:
+  - inputs are validated before advancing from the Inputs step,
+  - JSON inputs are synced and parsed on navigation with per-field error reporting.
+- Standardized language in UI and code to use 'message' over 'payload'.
 
-This change resolves a long-standing issue where meaningful, user-actionable errors (such as passphrase validation failures) could be collapsed into generic messages like *“Operation failed.”*
+#### UI notices and warnings
 
-Error reporting is now:
-- deterministic,
-- consistent across all panels, and
-- informative by default.
+- Added a bright, consistent **Notice** widget (`ui_notice`) and applied it to key warnings.
+- Translation disclaimer text clarified to state explicitly that **only canonical document text is signed**.
+- Simplified and standardized warning and help copy across panels.
 
----
+#### Passphrase validation and errors
 
-## Release v0.6.0
+- Passphrase validation now returns structured `AppError` variants:
+  - required
+  - too short
+  - too long
+- User-facing error messages are clearer and consistently surfaced.
+- Tests updated to reflect typed validation failures.
 
-### Notes
+#### Keyfile durability, locking, and secret hygiene
 
-This release introduces a small but deliberate tightening of application semantics and UI flow.
-The core signing model is unchanged, but several internal and user-facing behaviors have been made more explicit and less ambiguous.
+- Keyfile writes now include a best-effort **directory fsync after atomic rename** to reduce crash-loss risk.
+- Key install and uninstall operations now acquire the **keyfile lock** to prevent concurrent mutation.
+- Key labels are stored as `Zeroizing<String>` in memory to reduce post-use exposure.
 
----
+#### Internal refactors and cleanup
 
-## Notable Changes
-
-### Explicit AppState construction
-
-- Removed `impl Default for AppState`.
-- Application state must now be constructed explicitly via the application initializer.
-- This enforces required invariants (filesystem context, security log initialization) at construction time and prevents accidental creation of under-specified state in tests or internal tooling.
-
-This is an internal breaking change and is the primary reason for the minor version bump.
-
----
-
-### Tag resolution moved into signing flow
-
-- Removed the manual **“Replace message tags”** button from the signing panel.
-- Added a **Resolve tags mode** option to the signing panel (`True` / `False`, default: `True`).
-- When enabled, tag resolution is performed automatically **at sign time**, immediately before signing.
-- The message text is rewritten prior to signing so that the visible message exactly matches what is signed.
-
-Tag resolution remains a preparatory transformation step and does not introduce new signing metadata or validation semantics.
-
----
-
-### Tag semantics clarification
-
-- Message tags are intended as explicit template markers, not general-purpose text substitution.
-- Tags use a `{{~tag_name}}` form to reduce accidental collisions with normal message content.
-- Tag resolution is deterministic and silent unless a hard internal failure occurs.
+- Consolidated repeated public-key hex decoding into
+  `crypto::decode_public_key_hex`.
+- Cleaned up keyfile directory scanning and helper reuse.
+- Expanded and reused clipboard helpers (`copy_label_with_button`) across panels.
+- Refactored keyfile lock-path computation into a dedicated helper.
 
 ---
-
-## Compatibility
-
-- No changes to cryptographic primitives, key storage format, or signature verification behavior.
-- Existing keyfiles and signatures remain fully compatible.
-- Internal helpers or tests that previously relied on `AppState::default()` must be updated to use explicit initialization.
-
----
-
-## Project status
-
-Sigillium Personal Signer / Verifier remains **pre-1.0**.
-Structural and UX refinements may continue to land in minor releases prior to a 1.0 stabilization point.

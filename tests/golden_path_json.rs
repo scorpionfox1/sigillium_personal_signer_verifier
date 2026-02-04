@@ -84,7 +84,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
 
     // Bad schema should reject signing
     assert!(
-        command::sign_payload(
+        command::sign_message(
             JSON_MSG,
             SignVerifyMode::Json,
             Some(BAD_SCHEMA),
@@ -96,7 +96,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     );
 
     // Good schema should allow signing
-    let sig2 = command::sign_payload(
+    let sig2 = command::sign_message(
         JSON_MSG,
         SignVerifyMode::Json,
         Some(GOOD_SCHEMA),
@@ -106,7 +106,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     .expect("sign key2 with good schema");
 
     // Cross-verify: key1 must fail, key2 must pass
-    let ok = command::verify_payload(
+    let ok = command::verify_message(
         &pub1_hex,
         JSON_MSG,
         &sig2,
@@ -116,7 +116,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     .expect("verify with key1 pub");
     assert!(!ok);
 
-    let ok = command::verify_payload(
+    let ok = command::verify_message(
         &pub2_hex,
         JSON_MSG,
         &sig2,
@@ -129,7 +129,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     // ---- Sign with key 1 under schema ----
     command::select_active_key(key1_id, &state, &ctx).unwrap();
 
-    let sig1 = command::sign_payload(
+    let sig1 = command::sign_message(
         JSON_MSG,
         SignVerifyMode::Json,
         Some(GOOD_SCHEMA),
@@ -138,7 +138,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     )
     .expect("sign key1 with good schema");
 
-    let ok = command::verify_payload(
+    let ok = command::verify_message(
         &pub2_hex,
         JSON_MSG,
         &sig1,
@@ -148,7 +148,7 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     .expect("verify with key2 pub");
     assert!(!ok);
 
-    let ok = command::verify_payload(
+    let ok = command::verify_message(
         &pub1_hex,
         JSON_MSG,
         &sig1,
@@ -159,10 +159,10 @@ fn golden_path_json_two_keys_schema_branch_cross_verify_and_remove() {
     assert!(ok);
 
     // ---- No-schema branch: key1 should still sign/verify ----
-    let sig1_ns = command::sign_payload(JSON_MSG, SignVerifyMode::Json, None, &state, None)
+    let sig1_ns = command::sign_message(JSON_MSG, SignVerifyMode::Json, None, &state, None)
         .expect("sign key1 without schema");
 
-    let ok = command::verify_payload(&pub1_hex, JSON_MSG, &sig1_ns, SignVerifyMode::Json, None)
+    let ok = command::verify_message(&pub1_hex, JSON_MSG, &sig1_ns, SignVerifyMode::Json, None)
         .expect("verify key1 without schema");
     assert!(ok);
 }

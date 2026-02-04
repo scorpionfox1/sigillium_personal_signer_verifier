@@ -2,7 +2,7 @@
 
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
-    advance_doc, build_json_bundle, load_wizard_from_str, set_input_json_from_str_current_doc,
+    advance_doc, build_doc_bundle, load_wizard_from_str, set_input_json_from_str_current_doc,
     set_input_value_current_doc,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::{
@@ -201,7 +201,7 @@ fn document_wizard_basic_flow_builds_bundle() {
     .expect("set metadata json");
 
     // Build bundle JSON
-    let bundle = build_json_bundle(&w).expect("build bundle");
+    let bundle = build_doc_bundle(&w).expect("build bundle");
 
     // Basic shape assertions
     assert_eq!(bundle["signed_utc"].as_str().unwrap(), TAG_SIGNED_UTC);

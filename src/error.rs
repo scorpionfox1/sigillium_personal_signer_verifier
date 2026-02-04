@@ -21,7 +21,6 @@ pub struct UserMsg {
 
 #[derive(Debug)]
 pub enum AppError {
-    KeyfilePassphraseBad,
     // --------------------------------------------------
     // generic / plumbing
     // --------------------------------------------------
@@ -55,7 +54,7 @@ pub enum AppError {
     // --------------------------------------------------
     // input / validation
     // --------------------------------------------------
-    EmptyPayload,
+    EmptyMessage,
     EmptyMnemonic,
     InvalidMnemonic,
     EmptyLabel,
@@ -126,6 +125,14 @@ pub enum AppError {
     KeyfilePermsEnforceFailed,
     KeyfilePermsInsufficient,
     PlatformHardeningFailed,
+
+    // --------------------------------------------------
+    // passphrase validation
+    // --------------------------------------------------
+    KeyfilePassphraseBad,
+    PassphraseRequired,
+    PassphraseTooShort { min: usize },
+    PassphraseTooLong { max: usize },
 }
 
 impl AppError {
@@ -136,7 +143,6 @@ impl AppError {
         let detail = Some(self.to_string());
 
         let short: &'static str = match self {
-            KeyfilePassphraseBad => "Incorrect keyfile passphrase.",
             // generic
             Io(_) => "File operation failed.",
             Msg(_) => "Operation failed.",
@@ -168,7 +174,7 @@ impl AppError {
             KeyfileFsIntentSerializeFailed(_) => "Failed to prepare keyfile operation.",
 
             // input
-            EmptyPayload => "Payload is required.",
+            EmptyMessage => "Message is required.",
             EmptyMnemonic => "Mnemonic is required.",
             InvalidMnemonic => "Invalid mnemonic.",
             EmptyLabel => "Label is required.",
@@ -228,6 +234,24 @@ impl AppError {
                 kind = UserMsgKind::Warn;
                 "Some security hardening steps failed."
             }
+
+            // passphrase validation
+            KeyfilePassphraseBad => {
+                kind = UserMsgKind::Warn;
+                "Incorrect keyfile passphrase."
+            }
+            PassphraseRequired => {
+                kind = UserMsgKind::Warn;
+                "Passphrase required."
+            }
+            PassphraseTooShort { .. } => {
+                kind = UserMsgKind::Warn;
+                "Passphrase too short."
+            }
+            PassphraseTooLong { .. } => {
+                kind = UserMsgKind::Warn;
+                "Passphrase too long."
+            }
         };
 
         UserMsg {
@@ -243,7 +267,6 @@ impl fmt::Display for AppError {
         use AppError::*;
 
         match self {
-            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
             Io(e) => write!(f, "io error: {e}"),
             Msg(s) => write!(f, "{s}"),
             InternalStateLockFailed => write!(f, "internal state lock failed"),
@@ -277,7 +300,7 @@ impl fmt::Display for AppError {
             KeyfileFsRemoveFailed(s) => write!(f, "keyfile remove failed: {s}"),
             KeyfileFsIntentSerializeFailed(s) => write!(f, "keyfile intent serialize failed: {s}"),
 
-            EmptyPayload => write!(f, "empty payload"),
+            EmptyMessage => write!(f, "empty message"),
             EmptyMnemonic => write!(f, "empty mnemonic"),
             InvalidMnemonic => write!(f, "invalid mnemonic"),
             EmptyLabel => write!(f, "empty label"),
@@ -333,6 +356,11 @@ impl fmt::Display for AppError {
             KeyfilePermsEnforceFailed => write!(f, "failed to enforce keyfile permissions"),
             KeyfilePermsInsufficient => write!(f, "insufficient keyfile permissions"),
             PlatformHardeningFailed => write!(f, "platform hardening failure"),
+
+            KeyfilePassphraseBad => write!(f, "incorrect keyfile passphrase"),
+            PassphraseRequired => write!(f, "passphrase required"),
+            PassphraseTooShort { min } => write!(f, "passphrase too short (min {min})"),
+            PassphraseTooLong { max } => write!(f, "passphrase too long (max {max})"),
         }
     }
 }

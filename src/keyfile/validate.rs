@@ -1,5 +1,6 @@
 // src/keyfile/validate.rs
 
+use crate::crypto as app_crypto;
 use crate::error::{AppError, AppResult};
 use crate::keyfile::crypto::decode_nonce12_b64;
 use crate::keyfile::fs::read_json;
@@ -33,21 +34,11 @@ pub fn verify_keyfile_mac_on_disk(path: &Path, master_key: &[u8; 32]) -> AppResu
 
 pub(crate) fn validate_keyfile_structure(data: &KeyfileData) -> AppResult<()> {
     // salt must decode to 16 bytes
-    let salt = general_purpose::STANDARD
-        .decode(&data.salt)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
-    if salt.len() != 16 {
-        return Err(AppError::KeyfileStructCorrupted);
-    }
+    decode_b64_exact_len(&data.salt, 16, AppError::KeyfileStructCorrupted)?;
 
     // if present, mac must decode to 32 bytes
     if let Some(mac_b64) = &data.file_mac_b64 {
-        let mac = general_purpose::STANDARD
-            .decode(mac_b64)
-            .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
-        if mac.len() != 32 {
-            return Err(AppError::KeyfileMacInvalid);
-        }
+        decode_b64_exact_len(mac_b64, 32, AppError::KeyfileMacInvalid)?;
     }
 
     // key ids must be unique; key material fields must decode with expected lengths.
@@ -57,30 +48,21 @@ pub(crate) fn validate_keyfile_structure(data: &KeyfileData) -> AppResult<()> {
             return Err(AppError::KeyfileStructCorrupted);
         }
 
-        let pk = hex::decode(&k.public_key_hex).map_err(|_| AppError::InvalidPublicKeyHex)?;
-        if pk.len() != 32 {
-            return Err(AppError::InvalidPublicKeyLength);
-        }
+        app_crypto::decode_public_key_hex(&k.public_key_hex)?;
 
         // nonce is always 12 bytes for ChaCha20-Poly1305
         decode_nonce12_b64(&k.key_nonce_b64)?;
 
         // ciphertext must be base64 decodable (length can vary)
-        general_purpose::STANDARD
-            .decode(&k.encrypted_private_key_b64)
-            .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        decode_b64(&k.encrypted_private_key_b64)?;
 
         // associated_key_id is required now
         decode_nonce12_b64(&k.associated_key_id.nonce_b64)?;
-        general_purpose::STANDARD
-            .decode(&k.associated_key_id.ciphertext_b64)
-            .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        decode_b64(&k.associated_key_id.ciphertext_b64)?;
 
         // label is required too (keep if you already validate it elsewhere; if not, add similarly)
         decode_nonce12_b64(&k.label.nonce_b64)?;
-        general_purpose::STANDARD
-            .decode(&k.label.ciphertext_b64)
-            .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        decode_b64(&k.label.ciphertext_b64)?;
     }
 
     Ok(())
@@ -100,16 +82,8 @@ pub(crate) fn verify_file_mac(
     master_key: &[u8; 32],
     expected_b64: &str,
 ) -> AppResult<()> {
-    let expected_vec = general_purpose::STANDARD
-        .decode(expected_b64)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
-
-    if expected_vec.len() != 32 {
-        return Err(AppError::KeyfileMacInvalid);
-    }
-
-    let mut expected = [0u8; 32];
-    expected.copy_from_slice(&expected_vec);
+    let expected_vec = decode_b64_exact_len(expected_b64, 32, AppError::KeyfileMacInvalid)?;
+    let expected = to_arr32(&expected_vec);
 
     let actual = compute_file_mac_bytes(data, master_key)?;
 
@@ -118,6 +92,26 @@ pub(crate) fn verify_file_mac(
     }
 
     Ok(())
+}
+
+fn decode_b64(value: &str) -> AppResult<Vec<u8>> {
+    general_purpose::STANDARD
+        .decode(value)
+        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))
+}
+
+fn decode_b64_exact_len(value: &str, len: usize, err: AppError) -> AppResult<Vec<u8>> {
+    let decoded = decode_b64(value)?;
+    if decoded.len() != len {
+        return Err(err);
+    }
+    Ok(decoded)
+}
+
+fn to_arr32(bytes: &[u8]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out.copy_from_slice(bytes);
+    out
 }
 
 fn mac_key_from_master(master_key: &[u8; 32]) -> [u8; 32] {

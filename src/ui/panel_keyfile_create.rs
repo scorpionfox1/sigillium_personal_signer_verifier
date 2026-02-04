@@ -126,10 +126,6 @@ impl CreateKeyfilePanel {
                     }
                 }
             }
-
-            self.passphrase.clear();
-            self.confirm_passphrase.clear();
-            self.keyfile_name.clear();
         }
 
         self.msg.show(ui);

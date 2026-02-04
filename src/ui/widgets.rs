@@ -15,6 +15,19 @@ pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
         .clicked()
 }
 
+pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
+    let mut copied = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let ok = !value.trim().is_empty();
+        if copy_icon_button(ui, ok, hover) {
+            ui.ctx().copy_text(value.to_string());
+            copied = true;
+        }
+    });
+    copied
+}
+
 /// Standard Active Key selector used across panels.
 /// - Shows None + installed keys.
 /// - Selecting None clears active key.
@@ -33,7 +46,7 @@ pub fn active_key_selector(
     let mut choice: Option<KeyId> = current_active_id;
 
     let selected_text = match choice.and_then(|id| metas.iter().find(|k| k.id == id)) {
-        Some(k) => format!("{} ({})", k.label, k.domain),
+        Some(k) => format!("{} ({})", k.label.as_str(), k.domain),
         None => "None".to_string(),
     };
 
@@ -53,7 +66,7 @@ pub fn active_key_selector(
                         ui.selectable_value(
                             &mut choice,
                             Some(k.id),
-                            format!("{} ({})", k.label, k.domain),
+                            format!("{} ({})", k.label.as_str(), k.domain),
                         );
                     }
                 });
@@ -83,4 +96,30 @@ pub fn active_key_selector(
     } else {
         Ok(choice)
     }
+}
+
+pub fn ui_notice(ui: &mut egui::Ui, body: &str) {
+    // Intentionally bright "attention" yellow (not red, not muted).
+    // Works in both dark and light mode.
+    let accent = egui::Color32::from_rgb(255, 215, 90);
+
+    // Strong border + noticeable (but not obnoxious) tint.
+    let stroke = egui::Stroke::new(1.5, accent);
+    let fill = egui::Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 48);
+
+    egui::Frame::group(ui.style())
+        .inner_margin(egui::Margin::same(12))
+        .stroke(stroke)
+        .fill(fill)
+        .corner_radius(egui::CornerRadius::same(8))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Notice")
+                    .size(18.0)
+                    .strong()
+                    .color(accent),
+            );
+            ui.add_space(4.0);
+            ui.label(body);
+        });
 }

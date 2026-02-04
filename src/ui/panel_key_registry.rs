@@ -99,58 +99,42 @@ impl KeyRegistryPanel {
                         ui.weak("Active key details");
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Label");
-                            let ok = !active_label.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy label") {
-                                ui.ctx().copy_text(active_label.clone());
-                            }
-                        });
-                        let mut v = active_label.clone();
-                        ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
-
-                        ui.add_space(6.0);
-
-                        ui.horizontal(|ui| {
-                            ui.label("Domain");
-                            let ok = !active_domain.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy domain") {
-                                ui.ctx().copy_text(active_domain.clone());
-                            }
-                        });
-                        let mut v = active_domain.clone();
-                        ui.add(egui::TextEdit::singleline(&mut v).interactive(false));
-
-                        ui.add_space(6.0);
-
-                        ui.horizontal(|ui| {
-                            ui.label("Associated ID");
-                            let ok = !active_assoc_id.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy associated ID") {
-                                ui.ctx().copy_text(active_assoc_id.clone());
-                            }
-                        });
-                        let mut v = active_assoc_id.clone();
-                        ui.add(
-                            egui::TextEdit::singleline(&mut v)
-                                .interactive(false)
-                                .hint_text("—"),
+                        copyable_readonly_field(
+                            ui,
+                            "Label",
+                            active_label.as_str(),
+                            "Copy label",
+                            None,
                         );
 
                         ui.add_space(6.0);
 
-                        ui.horizontal(|ui| {
-                            ui.label("Public key (hex)");
-                            let ok = !active_pubkey_hex.is_empty();
-                            if widgets::copy_icon_button(ui, ok, "Copy public key") {
-                                ui.ctx().copy_text(active_pubkey_hex.clone());
-                            }
-                        });
-                        let mut v = active_pubkey_hex.clone();
-                        ui.add(
-                            egui::TextEdit::singleline(&mut v)
-                                .interactive(false)
-                                .hint_text("No active key"),
+                        copyable_readonly_field(
+                            ui,
+                            "Domain",
+                            &active_domain,
+                            "Copy domain",
+                            None,
+                        );
+
+                        ui.add_space(6.0);
+
+                        copyable_readonly_field(
+                            ui,
+                            "Associated ID",
+                            &active_assoc_id,
+                            "Copy associated ID",
+                        Some("—"),
+                        );
+
+                        ui.add_space(6.0);
+
+                        copyable_readonly_field(
+                            ui,
+                            "Public key (hex)",
+                            &active_pubkey_hex,
+                            "Copy public key",
+                        Some("No active key"),
                         );
 
                         ui.add_space(6.0);
@@ -194,9 +178,10 @@ impl KeyRegistryPanel {
 
                         if !self.enforce_standard_domain {
                             ui.add_space(4.0);
-                            ui.colored_label(
-                                egui::Color32::YELLOW,
-                                "Warning: Standardization is OFF. The domain will be used EXACTLY as typed (no trimming, no lowercasing, no validation). Invisible characters, spaces, and typos will change the derived key.",
+                            crate::ui::widgets::ui_notice(
+                                ui,
+                                "Key standardization is currently disabled.\n\
+                                Be sure to record EXACTLY the text string used for domain. Otherwise, key recovery may be more difficult.",
                             );
                         }
 
@@ -267,20 +252,11 @@ impl KeyRegistryPanel {
 
                         ui.add_space(10.0);
 
-                        egui::Frame::group(ui.style())
-                            .stroke(egui::Stroke::new(1.0, egui::Color32::YELLOW))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new("IMPORTANT: backup required")
-                                        .strong()
-                                        .color(egui::Color32::YELLOW),
-                                );
-                                ui.add_space(4.0);
-                                ui.label(
-                                    "Do NOT rely on this app as permanent storage. Securely record and store your \
-                    mnemonic + domain and any associated ID on a physical medium. Otherwise, loss of this device/keyfile would mean permanent loss of key.",
-                                );
-                            });
+                        crate::ui::widgets::ui_notice(
+                            ui,
+                            "DO NOT rely on this application as permanent key storage!\n\
+                            Create and securely store physical backups of your mnemonics and any associated meta-data. Otherwise, key recovery is impossible.",
+                        );
                     });
                 });
 
@@ -350,4 +326,20 @@ impl KeyRegistryPanel {
                 }
             });
     }
+}
+
+fn copyable_readonly_field(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &str,
+    hover: &str,
+    hint: Option<&str>,
+) {
+    widgets::copy_label_with_button(ui, label, value, hover);
+    let mut v = value.to_string();
+    let mut field = egui::TextEdit::singleline(&mut v).interactive(false);
+    if let Some(hint) = hint {
+        field = field.hint_text(hint);
+    }
+    ui.add(field);
 }

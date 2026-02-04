@@ -133,18 +133,12 @@ impl SignPanel {
 
                 ui.horizontal(|ui| {
                     ui.label("Output mode:");
-                    if ui
-                        .selectable_label(output_mode == SignOutputMode::Signature, "Signature")
-                        .clicked()
-                    {
-                        output_mode = SignOutputMode::Signature;
-                    }
-                    if ui
-                        .selectable_label(output_mode == SignOutputMode::Record, "Record")
-                        .clicked()
-                    {
-                        output_mode = SignOutputMode::Record;
-                    }
+                    ui.selectable_value(
+                        &mut output_mode,
+                        SignOutputMode::Signature,
+                        "Signature",
+                    );
+                    ui.selectable_value(&mut output_mode, SignOutputMode::Record, "Record");
                 });
 
                 if let Ok(mut g) = state.sign_output_mode.lock() {
@@ -162,18 +156,8 @@ impl SignPanel {
 
                 ui.horizontal(|ui| {
                     ui.label("Resolve tags mode:");
-                    if ui
-                        .selectable_label(resolve_tags_mode == true, "True")
-                        .clicked()
-                    {
-                        resolve_tags_mode = true;
-                    }
-                    if ui
-                        .selectable_label(resolve_tags_mode == false, "False")
-                        .clicked()
-                    {
-                        resolve_tags_mode = false;
-                    }
+                    ui.selectable_value(&mut resolve_tags_mode, true, "True");
+                    ui.selectable_value(&mut resolve_tags_mode, false, "False");
                 });
 
                 if let Ok(mut g) = state.sign_resolve_tag_mode.lock() {
@@ -220,7 +204,7 @@ impl SignPanel {
                                     .desired_rows(6)
                                     .hint_text(
 r#"{ 
-  "payload_name": "payload",
+  "message_name": "message",
   "signature_name": "signature",
   "pub_key_name": "pub_key",
   "assoc_key_id_name": "assoc_key_id"
@@ -273,7 +257,7 @@ r#"{
                             None
                         };
 
-                        match command::sign_payload(
+                        match command::sign_message(
                             self.message.trim(),
                             sign_mode,
                             schema_opt,

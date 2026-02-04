@@ -122,6 +122,7 @@ mod tests {
                 label: label.to_string(),
                 ver: "v1.0".to_string(),
             },
+            doc_about: None,
             sections: vec![mk_section("s1")],
             expected_hash_hex: "00".to_string(),
             computed_hash_hex: "00".to_string(),

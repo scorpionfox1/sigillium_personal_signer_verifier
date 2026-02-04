@@ -17,6 +17,10 @@ pub struct BundleTemplate {
 pub struct DocTemplate {
     pub doc_identity: DocIdentity,
     pub doc_hash: DocHash,
+
+    /// Optional UI-only intro shown in the wizard. Not part of signed material.
+    pub doc_about: Option<String>,
+
     pub sections: Vec<SectionTemplate>,
 }
 

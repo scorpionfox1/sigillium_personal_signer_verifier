@@ -3,6 +3,7 @@
 use crate::error::AppError;
 use bip39::Mnemonic;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use hex;
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use zeroize::Zeroizing;
@@ -43,6 +44,17 @@ pub fn public_key_from_private(private: &[u8; 32]) -> [u8; 32] {
     let mut out = [0u8; 32];
     out.copy_from_slice(verifying_key.as_bytes());
     out
+}
+
+pub fn decode_public_key_hex(public_key_hex: &str) -> Result<[u8; 32], AppError> {
+    let pk_bytes = hex::decode(public_key_hex.trim()).map_err(|_| AppError::InvalidPublicKeyHex)?;
+    if pk_bytes.len() != 32 {
+        return Err(AppError::InvalidPublicKeyLength);
+    }
+
+    let mut pk = [0u8; 32];
+    pk.copy_from_slice(&pk_bytes);
+    Ok(pk)
 }
 
 // NOTE: No signature context prefix yet.

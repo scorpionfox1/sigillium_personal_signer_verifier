@@ -38,7 +38,7 @@ pub struct KeyMeta {
     pub public_key: [u8; 32],
 
     // decrypted in-memory only (encrypted at rest in keyfile)
-    pub label: String,
+    pub label: Zeroizing<String>,
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
