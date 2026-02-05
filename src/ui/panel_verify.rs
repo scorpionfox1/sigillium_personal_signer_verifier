@@ -83,6 +83,8 @@ impl VerifyPanel {
                     ui.selectable_value(&mut mode, SignVerifyMode::Json, "JSON");
                 });
 
+                ui.separator();
+
                 if mode != prev_mode {
                     if let Ok(mut g) = state.sign_verify_mode.lock() {
                         *g = mode;

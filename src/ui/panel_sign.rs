@@ -165,6 +165,7 @@ impl SignPanel {
                 }
 
                 ui.add_space(10.0);
+                ui.separator();
 
                 // ---- Message (left) + Schema/Config (right)
                 ui.columns(2, |cols| {
