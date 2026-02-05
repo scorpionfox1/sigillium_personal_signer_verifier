@@ -171,7 +171,7 @@ impl SignPanel {
                 ui.columns(2, |cols| {
                     // LEFT: message
                     cols[0].horizontal(|ui| {
-                        ui.label("Message");
+                        widgets::section_header(ui, "Message");
                         let ok = !self.message.trim().is_empty();
                         if widgets::copy_icon_button(ui, ok, "Copy message") {
                             ui.ctx().copy_text(self.message.clone());
@@ -337,10 +337,29 @@ r#"{
 
                 ui.columns(2, |cols| {
                     cols[0].horizontal(|ui| {
-                        ui.label(left_label);
+                        widgets::section_header(ui, left_label);
                         let ok = !self.output_text.trim().is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy output") {
-                            ui.ctx().copy_text(self.output_text.clone());
+                        let hover = "Copy output";
+                        let copied = if output_mode == SignOutputMode::Record {
+                            widgets::copy_json_icon_button(
+                                ui,
+                                ok,
+                                "Copy output",
+                                self.output_text.trim(),
+                            )
+                        } else {
+                            widgets::copy_icon_button(ui, ok, hover)
+                        };
+                        if copied {
+                            if output_mode == SignOutputMode::Signature {
+                                ui.ctx().copy_text(self.output_text.clone());
+                            }
+                            let msg = if output_mode == SignOutputMode::Record {
+                                "Copied output JSON to clipboard."
+                            } else {
+                                "Copied output to clipboard."
+                            };
+                            self.msg.set_success(msg);
                         }
                     });
 
@@ -351,7 +370,7 @@ r#"{
                             .hint_text("Output will appear here…"),
                     );
 
-                    cols[1].label("Active key meta-data");
+                    widgets::section_header(&mut cols[1], "Active key meta-data");
 
                     let w = cols[1].available_width().min(480.0);
 

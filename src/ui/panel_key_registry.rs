@@ -76,7 +76,7 @@ impl KeyRegistryPanel {
                 let has_active_key = current_active_id.is_some();
 
                 ui.group(|ui| {
-                    ui.label("Active key");
+                    widgets::section_header(ui, "Active key");
 
                     if let Err(e) = widgets::active_key_selector(
                         ui,
@@ -147,7 +147,7 @@ impl KeyRegistryPanel {
                 ui.add_space(10.0);
 
                 ui.group(|ui| {
-                    ui.label("Install key");
+                    widgets::section_header(ui, "Install key");
 
                     let install_enabled = !has_active_key;
                     if !install_enabled {

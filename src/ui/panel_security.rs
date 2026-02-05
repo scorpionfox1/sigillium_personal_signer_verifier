@@ -5,7 +5,7 @@ use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
 
-use super::message::PanelMsgState;
+use super::{message::PanelMsgState, widgets};
 use super::Route;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,7 +97,7 @@ impl SecurityPanel {
     }
 
     fn ui_security_log(&mut self, ui: &mut egui::Ui, state: &AppState) {
-        ui.label("Security log");
+        widgets::section_header(ui, "Security log");
         ui.add_space(6.0);
 
         if self.security_log_rendered.is_empty() {
@@ -123,7 +123,7 @@ impl SecurityPanel {
         ctx: &AppCtx,
         _route: &mut Route,
     ) {
-        ui.label("Change passphrase");
+        widgets::section_header(ui, "Change passphrase");
         ui.add_space(6.0);
 
         let mask = !self.show_passphrases;
@@ -195,7 +195,7 @@ impl SecurityPanel {
     }
 
     fn ui_self_destruct(&mut self, ui: &mut egui::Ui, ctx: &AppCtx, route: &mut Route) {
-        ui.label("Self-destruct");
+        widgets::section_header(ui, "Self-destruct");
         ui.add_space(6.0);
 
         ui.weak("This will delete the keyfile using best-effort secure deletion.");

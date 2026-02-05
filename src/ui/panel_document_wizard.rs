@@ -289,7 +289,7 @@ impl DocumentWizardPanel {
         if let Ok(d) = dw::current_doc(wiz) {
             if !d.template_errors.is_empty() {
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("Template problems (must fix)").strong());
+                    widgets::section_header(ui, "Template problems (must fix)");
                     for e in d.template_errors.iter() {
                         ui.label(format!("- {e}"));
                     }
@@ -299,7 +299,7 @@ impl DocumentWizardPanel {
 
             if !d.template_warnings.is_empty() {
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("Template warnings").strong());
+                    widgets::section_header(ui, "Template warnings");
                     for w in d.template_warnings.iter() {
                         ui.label(format!("- {w}"));
                     }
@@ -445,7 +445,7 @@ impl DocumentWizardPanel {
         // This panel should be unreachable when there are template failures, but keep a defensive guard.
         if !can_build {
             ui.group(|ui| {
-                ui.label(egui::RichText::new("Cannot build: template has hard failures.").strong());
+                widgets::section_header(ui, "Cannot build: template has hard failures.");
                 ui.label("Go back and review the template problems.");
             });
             ui.add_space(6.0);
@@ -489,14 +489,15 @@ impl DocumentWizardPanel {
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Document bundle").strong());
+                        widgets::section_header(ui, "Document bundle");
 
                         let can_copy = !bundle_out.trim().is_empty();
-                        if ui
-                            .add_enabled(can_copy, egui::Button::new("Copy"))
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(bundle_out.trim().to_string());
+                        if widgets::copy_json_icon_button(
+                            ui,
+                            can_copy,
+                            "Copy document bundle",
+                            bundle_out.trim(),
+                        ) {
                             msg.set_success("Copied document bundle JSON to clipboard.");
                         }
                     });
@@ -518,7 +519,7 @@ impl DocumentWizardPanel {
                 egui::vec2(right_w, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    ui.label(egui::RichText::new("Individual document hashes").strong());
+                    widgets::section_header(ui, "Individual document hashes");
                     ui.add_space(6.0);
 
                     egui::ScrollArea::vertical()
@@ -589,7 +590,7 @@ fn ui_doc_screen_skeleton(
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 if let Some(h) = header {
-                    ui.label(egui::RichText::new(h).strong().size(19.0));
+                    widgets::screen_header(ui, h);
                     ui.add_space(6.0);
                 }
                 body(ui);
@@ -612,7 +613,7 @@ fn ui_doc_screen_skeleton_notice_above_header(
             .show(ui, |ui| {
                 ui_centered_notice(ui, ui.available_width(), notice);
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new(header).strong().size(19.0));
+                widgets::screen_header(ui, header);
                 ui.add_space(6.0);
                 body(ui);
             });
@@ -696,7 +697,7 @@ fn ui_section_inputs(
 ) {
     ui.group(|ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.label(egui::RichText::new("Inputs").strong().size(19.0));
+            widgets::section_header(ui, "Inputs");
             ui.add_space(6.0);
 
             if specs.is_empty() {

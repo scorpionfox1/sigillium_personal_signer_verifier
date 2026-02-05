@@ -15,10 +15,28 @@ pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
         .clicked()
 }
 
+pub fn copy_json_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str, value: &str) -> bool {
+    if copy_icon_button(ui, enabled, hover) {
+        ui.ctx().copy_text(value.to_string());
+        return true;
+    }
+    false
+}
+
 const LARGE_BUTTON_TEXT_SIZE: f32 = 17.0;
+const SECTION_HEADER_TEXT_SIZE: f32 = 16.0;
+const SCREEN_HEADER_TEXT_SIZE: f32 = 19.0;
 
 pub fn large_button(label: &str) -> egui::Button<'_> {
     egui::Button::new(egui::RichText::new(label).size(LARGE_BUTTON_TEXT_SIZE))
+}
+
+pub fn section_header(ui: &mut egui::Ui, label: &str) {
+    ui.label(egui::RichText::new(label).strong().size(SECTION_HEADER_TEXT_SIZE));
+}
+
+pub fn screen_header(ui: &mut egui::Ui, label: &str) {
+    ui.label(egui::RichText::new(label).strong().size(SCREEN_HEADER_TEXT_SIZE));
 }
 
 pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {

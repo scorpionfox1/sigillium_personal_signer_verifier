@@ -135,9 +135,16 @@ impl VerifyPanel {
 
                 ui.add_space(10.0);
 
-                ui.label(match mode {
+                let message_label = match mode {
                     SignVerifyMode::Text => "String Message",
                     SignVerifyMode::Json => "JSON Message",
+                };
+                ui.horizontal(|ui| {
+                    ui.label(message_label);
+                    let ok = !self.message.trim().is_empty();
+                    if widgets::copy_icon_button(ui, ok, "Copy message") {
+                        ui.ctx().copy_text(self.message.clone());
+                    }
                 });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.message)
@@ -153,7 +160,11 @@ impl VerifyPanel {
                 ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("Verify").strong()).clicked() {
+                    let can_verify = current_active_id.is_some();
+                    if ui
+                        .add_enabled(can_verify, egui::Button::new(egui::RichText::new("Verify").strong()))
+                        .clicked()
+                    {
                         self.clear_messages();
 
                         let pk_hex = if let Some(pk) = active_pubkey_hex.as_deref() {
