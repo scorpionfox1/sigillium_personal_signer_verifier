@@ -5,8 +5,8 @@ use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
 
-use super::{message::PanelMsgState, widgets};
 use super::Route;
+use super::{message::PanelMsgState, widgets};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SecurityTab {
@@ -97,7 +97,6 @@ impl SecurityPanel {
     }
 
     fn ui_security_log(&mut self, ui: &mut egui::Ui, state: &AppState) {
-        widgets::section_header(ui, "Security log");
         ui.add_space(6.0);
 
         if self.security_log_rendered.is_empty() {
@@ -123,7 +122,6 @@ impl SecurityPanel {
         ctx: &AppCtx,
         _route: &mut Route,
     ) {
-        widgets::section_header(ui, "Change passphrase");
         ui.add_space(6.0);
 
         let mask = !self.show_passphrases;
@@ -215,7 +213,6 @@ impl SecurityPanel {
         ui.add_space(10.0);
 
         ui.label("Confirmation phrase");
-        ui.add(egui::TextEdit::singleline(&mut self.confirm_phrase).hint_text("self destruct"));
 
         ui.add_space(10.0);
 

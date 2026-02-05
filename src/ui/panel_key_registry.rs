@@ -265,7 +265,7 @@ impl KeyRegistryPanel {
                 ui.add_space(10.0);
 
                 ui.group(|ui| {
-                    ui.label("Uninstall key");
+                    widgets::section_header(ui, "Uninstall key");
 
                     ui.add_space(4.0);
                     ui.weak("Uninstalls the currently selected key.");
