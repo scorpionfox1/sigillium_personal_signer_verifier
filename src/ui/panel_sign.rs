@@ -223,7 +223,7 @@ r#"{
 
                 ui.horizontal(|ui| {
                     if ui
-                        .add_enabled(can_sign, egui::Button::new("Sign"))
+                        .add_enabled(can_sign, egui::Button::new(egui::RichText::new("Sign").strong()))
                         .clicked()
                     {
                         self.clear_messages();

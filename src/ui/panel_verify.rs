@@ -153,7 +153,7 @@ impl VerifyPanel {
                 ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Verify").clicked() {
+                    if ui.button(egui::RichText::new("Verify").strong()).clicked() {
                         self.clear_messages();
 
                         let pk_hex = if let Some(pk) = active_pubkey_hex.as_deref() {

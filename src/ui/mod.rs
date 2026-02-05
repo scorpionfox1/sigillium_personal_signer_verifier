@@ -211,6 +211,7 @@ impl UiApp {
 
 impl eframe::App for UiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        apply_ui_scale(ctx);
         let rctx = self.derive_route_ctx();
 
         let had_activity = ctx.input(|i| {
@@ -395,4 +396,32 @@ impl eframe::App for UiApp {
             self.last_route = self.route;
         }
     }
+}
+
+fn apply_ui_scale(ctx: &egui::Context) {
+    let mut style = (*ctx.style()).clone();
+
+    let base = 16.0;
+    style.text_styles = [
+        (
+            egui::TextStyle::Heading,
+            egui::FontId::proportional(base + 4.0),
+        ),
+        (egui::TextStyle::Body, egui::FontId::proportional(base)),
+        (egui::TextStyle::Button, egui::FontId::proportional(base)),
+        (
+            egui::TextStyle::Small,
+            egui::FontId::proportional(base - 2.0),
+        ),
+        (
+            egui::TextStyle::Monospace,
+            egui::FontId::monospace(base - 1.0),
+        ),
+    ]
+    .into();
+
+    style.spacing.interact_size.y = 26.0;
+    style.spacing.button_padding = egui::vec2(10.0, 6.0);
+
+    ctx.set_style(style);
 }

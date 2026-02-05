@@ -10,7 +10,9 @@ use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree};
 use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY};
 use windows_sys::Win32::Storage::FileSystem::{
-    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    CreateFileW, FlushFileBuffers, MoveFileExW, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE,
+    FILE_SHARE_READ, FILE_SHARE_WRITE, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    OPEN_EXISTING,
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
@@ -382,6 +384,57 @@ pub fn is_stale_lock(pid: Option<u32>) -> bool {
 }
 
 pub fn fsync_dir_best_effort(_dir: &std::path::Path) -> Option<BestEffortFailure> {
+    let wide = |p: &Path| -> Vec<u16> {
+        p.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    };
+
+    let dir = wide(_dir);
+
+    unsafe {
+        let handle = CreateFileW(
+            dir.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            0,
+        );
+
+        if handle == 0 {
+            let errno = GetLastError() as i32;
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_open_failed",
+                errno: Some(errno),
+                msg: "failed to open directory handle for fsync",
+            });
+        }
+
+        let ok = FlushFileBuffers(handle);
+        let close_ok = CloseHandle(handle);
+
+        if close_ok == 0 {
+            let errno = GetLastError() as i32;
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_close_failed",
+                errno: Some(errno),
+                msg: "failed to close directory handle after fsync",
+            });
+        }
+
+        if ok == 0 {
+            let errno = GetLastError() as i32;
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_failed",
+                errno: Some(errno),
+                msg: "directory fsync failed",
+            });
+        }
+    }
+
     None
 }
 

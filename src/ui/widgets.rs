@@ -15,6 +15,12 @@ pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
         .clicked()
 }
 
+const LARGE_BUTTON_TEXT_SIZE: f32 = 17.0;
+
+pub fn large_button(label: &str) -> egui::Button<'_> {
+    egui::Button::new(egui::RichText::new(label).size(LARGE_BUTTON_TEXT_SIZE))
+}
+
 pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
     let mut copied = false;
     ui.horizontal(|ui| {

@@ -197,7 +197,7 @@ impl KeyRegistryPanel {
 
                         ui.horizontal(|ui| {
                             if ui
-                                .add_enabled(can_install, egui::Button::new("Install"))
+                                .add_enabled(can_install, egui::Button::new(egui::RichText::new("Install Key").strong()))
                                 .clicked()
                             {
                                 self.clear_messages();
