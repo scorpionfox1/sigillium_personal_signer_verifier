@@ -231,8 +231,8 @@ impl AppError {
             KeyfilePermsEnforceFailed => "Failed to enforce keyfile permissions.",
             KeyfilePermsInsufficient => "Keyfile permissions are insufficient.",
             PlatformHardeningFailed => {
-                kind = UserMsgKind::Warn;
-                "Some security hardening steps failed."
+                kind = UserMsgKind::Info;
+                "Some security hardening steps skipped."
             }
 
             // passphrase validation

@@ -16,9 +16,11 @@ use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::Win32::System::Threading::OpenProcessToken;
 
-fn current_user_principal() -> Option<String> {
+fn current_user_principals() -> Vec<String> {
+    let mut principals = Vec::new();
+
     if let Some(sid) = current_user_sid() {
-        return Some(format!("*{sid}"));
+        principals.push(format!("*{sid}"));
     }
 
     // Fallback: Try SID via `whoami /user`
@@ -31,7 +33,8 @@ fn current_user_principal() -> Option<String> {
                 }
                 if let Some(sid) = line.split_whitespace().last() {
                     if sid.starts_with("S-1-") {
-                        return Some(format!("*{}", sid));
+                        principals.push(format!("*{}", sid));
+                        break;
                     }
                 }
             }
@@ -39,9 +42,13 @@ fn current_user_principal() -> Option<String> {
     }
 
     // Fallback: DOMAIN\USERNAME
-    let user = std::env::var("USERNAME").ok()?;
-    let domain = std::env::var("USERDOMAIN").ok()?;
-    Some(format!("{}\\{}", domain, user))
+    if let (Ok(user), Ok(domain)) = (std::env::var("USERNAME"), std::env::var("USERDOMAIN")) {
+        principals.push(format!("{}\\{}", domain, user));
+    }
+
+    principals.sort();
+    principals.dedup();
+    principals
 }
 
 fn current_user_sid() -> Option<String> {
@@ -273,78 +280,63 @@ fn icacls_lockdown_best_effort(
 ) -> Option<BestEffortFailure> {
     let p = path.to_string_lossy().to_string();
     let metadata = fs::metadata(path).ok();
-    let perm = match metadata {
-        Some(ref meta) if meta.is_dir() => "(OI)(CI)(F)",
-        Some(ref meta) if meta.is_file() => "(F)",
-        Some(_) => {
-            return Some(BestEffortFailure {
-                kind: "windows_icacls_invalid_target",
-                errno: None,
-                msg: "icacls target was not a regular file or directory",
-            });
+    let mut perms = Vec::new();
+    match metadata {
+        Some(ref meta) if meta.is_dir() => {
+            perms.push("(OI)(CI)(F)");
+            perms.push("(F)");
         }
-        None => {
-            return Some(BestEffortFailure {
-                kind: "windows_icacls_metadata_failed",
-                errno: None,
-                msg: "icacls target metadata failed",
-            });
+        Some(ref meta) if meta.is_file() => {
+            perms.push("(F)");
+            perms.push("(OI)(CI)(F)");
         }
-    };
-
-    let principal = match current_user_principal() {
-        Some(p) => p,
-        None => {
-            return Some(BestEffortFailure {
-                kind: "windows_user_principal_unresolved",
-                errno: None,
-                msg: "Unable to resolve current user principal for icacls",
-            });
+        _ => {
+            perms.push("(F)");
+            perms.push("(OI)(CI)(F)");
         }
-    };
+    }
 
-    let grant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant {}:{perm}", principal)])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    if !grant_ok {
+    let principals = current_user_principals();
+    if principals.is_empty() {
         return Some(BestEffortFailure {
-            kind,
+            kind: "windows_user_principal_unresolved",
             errno: None,
-            msg,
+            msg: "Unable to resolve current user principal for icacls",
         });
     }
 
-    let inheritance_ok = Command::new("icacls")
-        .args([&p, "/inheritance:r"])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    for principal in principals {
+        for perm in &perms {
+            let grant_ok = Command::new("icacls")
+                .args([&p, &format!("/grant {}:{perm}", principal)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
 
-    if !inheritance_ok {
-        return Some(BestEffortFailure {
-            kind,
-            errno: None,
-            msg,
-        });
-    }
+            if !grant_ok {
+                continue;
+            }
 
-    let regrant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant:r {}:{perm}", principal)])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+            let inheritance_ok = Command::new("icacls")
+                .args([&p, "/inheritance:r"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
 
-    if regrant_ok {
-        None
-    } else {
-        Some(BestEffortFailure {
-            kind,
-            errno: None,
-            msg,
-        })
+            if !inheritance_ok {
+                continue;
+            }
+
+            let regrant_ok = Command::new("icacls")
+                .args([&p, &format!("/grant:r {}:{perm}", principal)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+
+            if regrant_ok {
+                return None;
+            }
+        }
     }
 }
 
