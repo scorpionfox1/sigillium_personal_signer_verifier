@@ -350,24 +350,11 @@ r#"{
                             .hint_text("Output will appear here…"),
                     );
 
-                    cols[1].label("Active key");
+                    cols[1].label("Active key meta-data");
 
-                    cols[1].horizontal(|ui| {
-                        ui.label("Public key (hex)");
-                        let ok = !active_pubkey_hex.is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
-                            ui.ctx().copy_text(active_pubkey_hex.clone());
-                        }
-                    });
-                    let mut pk = active_pubkey_hex.clone();
-                    cols[1].add(
-                        egui::TextEdit::singleline(&mut pk)
-                            .interactive(false)
-                            .hint_text("No active key"),
-                    );
+                    let w = cols[1].available_width().min(480.0);
 
-                    cols[1].add_space(6.0);
-
+                    // Associated ID
                     cols[1].horizontal(|ui| {
                         ui.label("Associated ID");
                         let ok = !active_assoc_id.is_empty();
@@ -376,11 +363,36 @@ r#"{
                         }
                     });
                     let mut aid = active_assoc_id.clone();
-                    cols[1].add(
-                        egui::TextEdit::singleline(&mut aid)
-                            .interactive(false)
-                            .hint_text("—"),
-                    );
+                    cols[1].scope(|ui| {
+                        ui.set_max_width(w);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut aid)
+                                .desired_width(w)
+                                .interactive(false)
+                                .hint_text("—"),
+                        );
+                    });
+
+                    cols[1].add_space(6.0);
+
+                    // Public key
+                    cols[1].horizontal(|ui| {
+                        ui.label("Public key (hex)");
+                        let ok = !active_pubkey_hex.is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
+                            ui.ctx().copy_text(active_pubkey_hex.clone());
+                        }
+                    });
+                    let mut pk = active_pubkey_hex.clone();
+                    cols[1].scope(|ui| {
+                        ui.set_max_width(w);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut pk)
+                                .desired_width(w)
+                                .interactive(false),
+                        );
+                    });
+
                 });
             });
     }
