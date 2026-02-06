@@ -107,14 +107,6 @@ pub fn harden_process_best_effort() -> Vec<BestEffortFailure> {
     Vec::new()
 }
 
-pub fn lock_key32_best_effort(key: &mut [u8; 32]) -> Option<BestEffortFailure> {
-    lock_bytes_best_effort(&mut key[..])
-}
-
-pub fn unlock_key32_best_effort(key: &mut [u8; 32]) -> Option<BestEffortFailure> {
-    unlock_bytes_best_effort(&mut key[..])
-}
-
 pub fn lock_bytes_best_effort(buf: &mut [u8]) -> Option<BestEffortFailure> {
     if buf.is_empty() {
         return None;
@@ -199,7 +191,18 @@ pub fn secure_delete_best_effort(path: &Path) -> (Result<(), String>, Vec<BestEf
 
     // Remove.
     match fs::remove_file(&final_path) {
-        Ok(_) => (Ok(()), warns),
+        Ok(_) => {
+            if let Some(parent) = final_path.parent() {
+                if let Some(fail) = fsync_dir_best_effort(parent) {
+                    warns.push(BestEffortFailure {
+                        kind: "windows_secure_delete_dir_fsync_failed",
+                        errno: fail.errno,
+                        msg: "secure delete parent dir fsync failed; delete may be less durable",
+                    });
+                }
+            }
+            (Ok(()), warns)
+        }
         Err(e) => (Err(format!("Remove file failed: {e}")), warns),
     }
 }

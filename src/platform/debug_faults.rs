@@ -319,25 +319,6 @@ pub fn maybe_inject_soft_fail_vec(op: &'static str) -> Vec<BestEffortFailure> {
     v
 }
 
-//
-// No-op stubs for release builds
-//
-
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_hard_fail_after(_: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_soft_fail_after(_: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_soft_fail_vec_after(_: usize, _: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_hard_fail_for_op_after(_: &str, _: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_soft_fail_for_op_after(_: &str, _: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn inject_soft_fail_vec_for_op_after(_: &str, _: usize, _: usize) {}
-#[cfg(not(any(debug_assertions, test)))]
-pub fn init_from_env() {}
-
 #[cfg(not(any(debug_assertions, test)))]
 pub fn maybe_inject_hard_fail(_: &'static str) -> Option<String> {
     None
