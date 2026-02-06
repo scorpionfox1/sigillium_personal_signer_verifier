@@ -232,7 +232,7 @@ impl AppError {
             KeyfilePermsInsufficient => "Keyfile permissions are insufficient.",
             PlatformHardeningFailed => {
                 kind = UserMsgKind::Info;
-                "Some security hardening steps skipped."
+                "Some optional security hardening steps skipped. See security log for details."
             }
 
             // passphrase validation

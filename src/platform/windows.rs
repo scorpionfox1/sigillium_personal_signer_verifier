@@ -339,13 +339,13 @@ fn icacls_lockdown_best_effort(
                 return None;
             }
         }
-
-        Some(BestEffortFailure {
-            kind,
-            errno: None,
-            msg,
-        })
     }
+
+    Some(BestEffortFailure {
+        kind,
+        errno: None,
+        msg,
+    })
 }
 
 pub fn is_stale_lock(pid: Option<u32>) -> bool {
