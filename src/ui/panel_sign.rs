@@ -59,14 +59,21 @@ impl SignPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        ui.heading("Sign");
+        widgets::panel_title(ui, "Sign");
         ui.separator();
 
         // Active key selector outside scroll area
         let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-        if let Err(e) =
-            widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
-        {
+        let mut active_key_error: Option<AppError> = None;
+        ui.horizontal(|ui| {
+            ui.label("Key:");
+            if let Err(e) =
+                widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
+            {
+                active_key_error = Some(e);
+            }
+        });
+        if let Some(e) = active_key_error {
             if let AppError::KeyfileQuarantined { .. } = e {
                 *route = Route::KeyfileSelect;
                 return;
@@ -171,7 +178,7 @@ impl SignPanel {
                 ui.columns(2, |cols| {
                     // LEFT: message
                     cols[0].horizontal(|ui| {
-                        widgets::section_header(ui, "Message");
+                        ui.label("Message");
                         let ok = !self.message.trim().is_empty();
                         if widgets::copy_icon_button(ui, ok, "Copy message") {
                             ui.ctx().copy_text(self.message.clone());
@@ -337,7 +344,7 @@ r#"{
 
                 ui.columns(2, |cols| {
                     cols[0].horizontal(|ui| {
-                        widgets::section_header(ui, left_label);
+                        ui.label(left_label);
                         let ok = !self.output_text.trim().is_empty();
                         let hover = "Copy output";
                         let copied = if output_mode == SignOutputMode::Record {
@@ -369,8 +376,6 @@ r#"{
                             .interactive(false)
                             .hint_text("Output will appear here…"),
                     );
-
-                    widgets::section_header(&mut cols[1], "Active key meta-data");
 
                     let w = cols[1].available_width().min(480.0);
 

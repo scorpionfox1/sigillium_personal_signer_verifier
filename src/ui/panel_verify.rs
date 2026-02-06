@@ -51,13 +51,25 @@ impl VerifyPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Verify");
+                widgets::panel_title(ui, "Verify");
                 ui.separator();
 
                 let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-                if let Err(e) =
-                    widgets::active_key_selector(ui, state, ctx, route, "verify_active_key", &metas)
-                {
+                let mut active_key_error: Option<AppError> = None;
+                ui.horizontal(|ui| {
+                    ui.label("Key:");
+                    if let Err(e) = widgets::active_key_selector(
+                        ui,
+                        state,
+                        ctx,
+                        route,
+                        "verify_active_key",
+                        &metas,
+                    ) {
+                        active_key_error = Some(e);
+                    }
+                });
+                if let Some(e) = active_key_error {
                     if let AppError::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;
                         return;

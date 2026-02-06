@@ -1,7 +1,7 @@
 // src/ui/panel_document_wizard.rs
 
 use crate::ui::message::PanelMsgState;
-use crate::ui::widgets::{self, ui_notice};
+use crate::ui::widgets;
 use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
@@ -86,7 +86,8 @@ impl DocumentWizardPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        ui.heading("Document Wizard");
+        widgets::panel_title(ui, "Document wizard");
+        ui.separator();
         ui.add_space(6.0);
 
         egui::ScrollArea::vertical()
@@ -611,28 +612,13 @@ fn ui_doc_screen_skeleton_notice_above_header(
         egui::Frame::NONE
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
-                ui_centered_notice(ui, ui.available_width(), notice);
+                widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
                 ui.add_space(8.0);
                 widgets::screen_header(ui, header);
                 ui.add_space(6.0);
                 body(ui);
             });
     });
-}
-
-fn ui_centered_notice(ui: &mut egui::Ui, page_w: f32, text: &str) {
-    // Slightly narrower than the text column, centered above the page content.
-    let notice_w = (page_w * 0.92).min(page_w);
-
-    ui.allocate_ui_with_layout(
-        egui::vec2(page_w, 0.0),
-        egui::Layout::top_down(egui::Align::Center),
-        |ui| {
-            ui.set_max_width(notice_w);
-            // ui_notice should naturally left-align; we are only centering the container.
-            ui_notice(ui, text);
-        },
-    );
 }
 
 fn ui_doc_text_window(ui: &mut egui::Ui, code: &mut String) {

@@ -1,5 +1,7 @@
 // src/ui/panel_lock.rs
 
+use crate::ui::widgets;
+
 use super::message::PanelMsgState;
 use super::Route;
 
@@ -41,7 +43,7 @@ impl LockPanel {
         route: &mut Route,
         return_route: &mut Option<Route>,
     ) {
-        ui.heading("App locked");
+        widgets::panel_title(ui, "Application locked");
         ui.separator();
 
         let unlocked = state.session.lock().map(|g| g.unlocked).unwrap_or(false);

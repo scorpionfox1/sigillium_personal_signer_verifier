@@ -39,6 +39,17 @@ pub fn screen_header(ui: &mut egui::Ui, label: &str) {
     ui.label(egui::RichText::new(label).strong().size(SCREEN_HEADER_TEXT_SIZE));
 }
 
+pub fn panel_title(ui: &mut egui::Ui, label: &str) {
+    let heading_size = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Heading)
+        .map(|font_id| font_id.size)
+        .unwrap_or(SCREEN_HEADER_TEXT_SIZE);
+
+    ui.label(egui::RichText::new(label).strong().size(heading_size));
+}
+
 pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
     let mut copied = false;
     ui.horizontal(|ui| {
@@ -122,7 +133,7 @@ pub fn active_key_selector(
     }
 }
 
-pub fn ui_notice(ui: &mut egui::Ui, body: &str) {
+fn ui_notice_inner(ui: &mut egui::Ui, body: &str) {
     // Intentionally bright "attention" yellow (not red, not muted).
     // Works in both dark and light mode.
     let accent = egui::Color32::from_rgb(255, 215, 90);
@@ -146,4 +157,35 @@ pub fn ui_notice(ui: &mut egui::Ui, body: &str) {
             ui.add_space(4.0);
             ui.label(body);
         });
+}
+
+const NOTICE_MAX_WIDTH: f32 = 640.0;
+
+pub enum NoticeAlign {
+    Left,
+    Center,
+}
+
+pub fn ui_notice(ui: &mut egui::Ui, body: &str, align: NoticeAlign) {
+    let available_width = ui.available_width();
+    let width = available_width.min(NOTICE_MAX_WIDTH);
+
+    match align {
+        NoticeAlign::Left => {
+            ui.scope(|ui| {
+                ui.set_max_width(width);
+                ui_notice_inner(ui, body);
+            });
+        }
+        NoticeAlign::Center => {
+            ui.allocate_ui_with_layout(
+                egui::vec2(available_width, 0.0),
+                egui::Layout::top_down(egui::Align::Center),
+                |ui| {
+                    ui.set_max_width(width);
+                    ui_notice_inner(ui, body);
+                },
+            );
+        }
+    }
 }

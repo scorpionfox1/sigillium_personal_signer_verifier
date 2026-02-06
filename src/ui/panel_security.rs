@@ -61,7 +61,7 @@ impl SecurityPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Security");
+                widgets::panel_title(ui, "Security");
                 ui.separator();
 
                 let prev_tab = self.tab;
