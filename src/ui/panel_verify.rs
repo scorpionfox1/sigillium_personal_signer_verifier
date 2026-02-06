@@ -51,13 +51,25 @@ impl VerifyPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Verify");
+                widgets::panel_title(ui, "Verify");
                 ui.separator();
 
                 let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-                if let Err(e) =
-                    widgets::active_key_selector(ui, state, ctx, route, "verify_active_key", &metas)
-                {
+                let mut active_key_error: Option<AppError> = None;
+                ui.horizontal(|ui| {
+                    ui.label("Key:");
+                    if let Err(e) = widgets::active_key_selector(
+                        ui,
+                        state,
+                        ctx,
+                        route,
+                        "verify_active_key",
+                        &metas,
+                    ) {
+                        active_key_error = Some(e);
+                    }
+                });
+                if let Some(e) = active_key_error {
                     if let AppError::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;
                         return;
@@ -82,6 +94,8 @@ impl VerifyPanel {
                     ui.selectable_value(&mut mode, SignVerifyMode::Text, "Text");
                     ui.selectable_value(&mut mode, SignVerifyMode::Json, "JSON");
                 });
+
+                ui.separator();
 
                 if mode != prev_mode {
                     if let Ok(mut g) = state.sign_verify_mode.lock() {
@@ -133,9 +147,16 @@ impl VerifyPanel {
 
                 ui.add_space(10.0);
 
-                ui.label(match mode {
+                let message_label = match mode {
                     SignVerifyMode::Text => "String Message",
                     SignVerifyMode::Json => "JSON Message",
+                };
+                ui.horizontal(|ui| {
+                    ui.label(message_label);
+                    let ok = !self.message.trim().is_empty();
+                    if widgets::copy_icon_button(ui, ok, "Copy message") {
+                        ui.ctx().copy_text(self.message.clone());
+                    }
                 });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.message)
@@ -151,7 +172,11 @@ impl VerifyPanel {
                 ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Verify").clicked() {
+                    let can_verify = current_active_id.is_some();
+                    if ui
+                        .add_enabled(can_verify, egui::Button::new(egui::RichText::new("Verify").strong()))
+                        .clicked()
+                    {
                         self.clear_messages();
 
                         let pk_hex = if let Some(pk) = active_pubkey_hex.as_deref() {

@@ -5,8 +5,8 @@ use sigillium_personal_signer_verifier_lib::{
     command, context::AppCtx, security_log::SecurityEvent, types::AppState,
 };
 
-use super::message::PanelMsgState;
 use super::Route;
+use super::{message::PanelMsgState, widgets};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SecurityTab {
@@ -61,7 +61,7 @@ impl SecurityPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Security");
+                widgets::panel_title(ui, "Security");
                 ui.separator();
 
                 let prev_tab = self.tab;
@@ -97,7 +97,6 @@ impl SecurityPanel {
     }
 
     fn ui_security_log(&mut self, ui: &mut egui::Ui, state: &AppState) {
-        ui.label("Security log");
         ui.add_space(6.0);
 
         if self.security_log_rendered.is_empty() {
@@ -123,7 +122,6 @@ impl SecurityPanel {
         ctx: &AppCtx,
         _route: &mut Route,
     ) {
-        ui.label("Change passphrase");
         ui.add_space(6.0);
 
         let mask = !self.show_passphrases;
@@ -195,7 +193,7 @@ impl SecurityPanel {
     }
 
     fn ui_self_destruct(&mut self, ui: &mut egui::Ui, ctx: &AppCtx, route: &mut Route) {
-        ui.label("Self-destruct");
+        widgets::section_header(ui, "Self-destruct");
         ui.add_space(6.0);
 
         ui.weak("This will delete the keyfile using best-effort secure deletion.");
@@ -215,7 +213,6 @@ impl SecurityPanel {
         ui.add_space(10.0);
 
         ui.label("Confirmation phrase");
-        ui.add(egui::TextEdit::singleline(&mut self.confirm_phrase).hint_text("self destruct"));
 
         ui.add_space(10.0);
 

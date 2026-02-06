@@ -53,7 +53,7 @@ impl KeyRegistryPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                ui.heading("Key Registry");
+                widgets::panel_title(ui, "Key Registry");
                 ui.separator();
 
                 let current_active_id = lock_session(state).ok().and_then(|g| g.active_key_id);
@@ -75,9 +75,9 @@ impl KeyRegistryPanel {
 
                 let has_active_key = current_active_id.is_some();
 
-                ui.group(|ui| {
-                    ui.label("Active key");
-
+                let mut active_key_error: Option<AppError> = None;
+                ui.horizontal(|ui| {
+                    ui.label("Key:");
                     if let Err(e) = widgets::active_key_selector(
                         ui,
                         state,
@@ -86,74 +86,53 @@ impl KeyRegistryPanel {
                         "active_key_select",
                         &metas,
                     ) {
-                        if let AppError::KeyfileQuarantined { .. } = e {
-                            *route = Route::KeyfileSelect;
-                            return;
-                        }
-                        self.msg.from_app_error(&e);
+                        active_key_error = Some(e);
                     }
+                });
+                if let Some(e) = active_key_error {
+                    if let AppError::KeyfileQuarantined { .. } = e {
+                        *route = Route::KeyfileSelect;
+                        return;
+                    }
+                    self.msg.from_app_error(&e);
+                }
+
+                ui.add_space(6.0);
+
+                if has_active_key {
+                    copyable_readonly_field(ui, "Label", active_label.as_str(), "Copy label", None);
 
                     ui.add_space(6.0);
 
-                    if has_active_key {
-                        ui.weak("Active key details");
-                        ui.add_space(6.0);
+                    copyable_readonly_field(ui, "Domain", &active_domain, "Copy domain", None);
 
-                        copyable_readonly_field(
-                            ui,
-                            "Label",
-                            active_label.as_str(),
-                            "Copy label",
-                            None,
-                        );
+                    ui.add_space(6.0);
 
-                        ui.add_space(6.0);
-
-                        copyable_readonly_field(
-                            ui,
-                            "Domain",
-                            &active_domain,
-                            "Copy domain",
-                            None,
-                        );
-
-                        ui.add_space(6.0);
-
-                        copyable_readonly_field(
-                            ui,
-                            "Associated ID",
-                            &active_assoc_id,
-                            "Copy associated ID",
+                    copyable_readonly_field(
+                        ui,
+                        "Associated ID",
+                        &active_assoc_id,
+                        "Copy associated ID",
                         Some("—"),
-                        );
+                    );
 
-                        ui.add_space(6.0);
+                    ui.add_space(6.0);
 
-                        copyable_readonly_field(
-                            ui,
-                            "Public key (hex)",
-                            &active_pubkey_hex,
-                            "Copy public key",
+                    copyable_readonly_field(
+                        ui,
+                        "Public key (hex)",
+                        &active_pubkey_hex,
+                        "Copy public key",
                         Some("No active key"),
-                        );
-
-                        ui.add_space(6.0);
-                        ui.weak("Set Active key to None to install a new key.");
-                    } else {
-                        ui.weak("No active key selected.");
-                    }
-                });
+                    );
+                }
 
                 ui.add_space(10.0);
 
-                ui.group(|ui| {
-                    ui.label("Install key");
-
-                    let install_enabled = !has_active_key;
-                    if !install_enabled {
-                        ui.weak("Clear the active key (set to None) to install a new key.");
-                        ui.add_space(6.0);
-                    }
+                let install_enabled = !has_active_key;
+                if install_enabled {
+                    ui.weak("Enter information to install a new key into the keyfile.");
+                    ui.add_space(6.0);
 
                     ui.add_enabled_ui(install_enabled, |ui| {
                         ui.label("Label");
@@ -181,7 +160,8 @@ impl KeyRegistryPanel {
                             crate::ui::widgets::ui_notice(
                                 ui,
                                 "Key standardization is currently disabled.\n\
-                                Be sure to record EXACTLY the text string used for domain. Otherwise, key recovery may be more difficult.",
+                            Be sure to record EXACTLY the text string used for domain. Otherwise, key recovery may be more difficult.",
+                                crate::ui::widgets::NoticeAlign::Left,
                             );
                         }
 
@@ -197,7 +177,10 @@ impl KeyRegistryPanel {
 
                         ui.horizontal(|ui| {
                             if ui
-                                .add_enabled(can_install, egui::Button::new("Install"))
+                                .add_enabled(
+                                    can_install,
+                                    egui::Button::new(egui::RichText::new("Install Key").strong()),
+                                )
                                 .clicked()
                             {
                                 self.clear_messages();
@@ -211,7 +194,6 @@ impl KeyRegistryPanel {
 
                                 // IMPORTANT: pass domain exactly as entered; command decides whether to normalize/validate.
                                 let res = command::install_key(
-
                                     mnemonic,
                                     &self.domain,
                                     label,
@@ -255,31 +237,30 @@ impl KeyRegistryPanel {
                         crate::ui::widgets::ui_notice(
                             ui,
                             "DO NOT rely on this application as permanent key storage!\n\
-                            Create and securely store physical backups of your mnemonics and any associated meta-data. Otherwise, key recovery is impossible.",
+                        Create and securely store physical backups of your mnemonics and any associated meta-data. Otherwise, key recovery is impossible.",
+                            crate::ui::widgets::NoticeAlign::Left,
                         );
                     });
-                });
+                }
 
                 self.msg.show(ui);
 
                 ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(10.0);
 
-                ui.group(|ui| {
-                    ui.label("Uninstall key");
+                if !has_active_key {
+                    ui.weak("Select a key to uninstall.");
+                    ui.add_space(6.0);
+                }
 
-                    ui.add_space(4.0);
-                    ui.weak("Uninstalls the currently selected key.");
-
-                    ui.add_space(8.0);
-
-                    if ui
-                        .add_enabled(has_active_key, egui::Button::new("Uninstall key"))
-                        .clicked()
-                    {
-                        self.clear_messages();
-                        self.confirm_uninstall = true;
-                    }
-                });
+                if ui
+                    .add_enabled(has_active_key, egui::Button::new("Uninstall key"))
+                    .clicked()
+                {
+                    self.clear_messages();
+                    self.confirm_uninstall = true;
+                }
 
                 // ==============================
                 // Confirm uninstall modal

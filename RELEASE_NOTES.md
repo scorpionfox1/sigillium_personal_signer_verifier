@@ -1,3 +1,50 @@
+## Release v0.7.1
+
+### Notes
+
+This is a polish + hardening release: **better Windows keyfile ACL enforcement and delete durability**, plus **UI readability improvements** and **clipboard ergonomics** across Sign/Verify/Document Wizard.
+
+---
+
+### Notable Changes
+
+#### Windows: keyfile hardening and durability
+
+- Improved current-user principal resolution for ACL lockdown:
+  - attempts to resolve the current user SID via Win32 APIs,
+  - falls back to `whoami /user`,
+  - falls back to `DOMAIN\USERNAME`,
+  - tries multiple principals/permutation grants when running `icacls`.
+- Implemented best-effort **directory fsync** on Windows using Win32 APIs (`CreateFileW` + `FlushFileBuffers`) to improve durability semantics.
+- Best-effort secure delete now also attempts a **parent directory fsync** after removing the file (to reduce “delete not durable” risk after crashes).
+
+#### UI: readability, consistency, and clipboard ergonomics
+
+- Added a global UI style pass (`apply_ui_scale`) to improve default readability:
+  - larger base font sizing and consistent text styles,
+  - larger interaction height and button padding.
+- Standardized panel headings and section headers via new widget helpers:
+  - `panel_title`, `screen_header`, `section_header`.
+- `ui_notice` now supports **left or centered alignment** with a reasonable max width, so notices stay readable on wide windows.
+- Added `copy_json_icon_button` and applied it where output is JSON:
+  - Sign output: better copy behavior + success messaging.
+  - Verify message: added a **copy message** shortcut.
+  - Document Wizard: bundle copy ergonomics improved.
+
+#### Document Wizard: review panel layout
+
+- “Review & Build” screen reworked:
+  - clearer title (“Review Document Bundle & Sign”),
+  - bundle output and per-document hashes are shown side-by-side,
+  - bundle copy affordance is placed directly in the bundle header,
+  - defensive guard: if template failures exist, the panel shows a clear “cannot build” message and returns early.
+
+#### Messaging
+
+- “PlatformHardeningFailed” is now treated as **informational** (optional hardening skipped) with clearer guidance to check the security log.
+
+---
+
 ## Release v0.7.0
 
 ### Notes

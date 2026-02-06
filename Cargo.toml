@@ -2,7 +2,7 @@
 
 [package]
 name = "sigillium_personal_signer_verifier"
-version = "0.7.0"
+version = "0.7.1"
 description = "An app to store multiple ed25519 keys and sign with them and to verify signitures."
 authors = ["paul carlona"]
 edition = "2021"
@@ -44,6 +44,8 @@ windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Security_Authorization",
 ] }
 eframe = "0.33.3"
 rfd = "0.16.0"

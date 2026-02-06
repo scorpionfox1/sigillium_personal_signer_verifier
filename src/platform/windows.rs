@@ -6,14 +6,28 @@ use std::io::{Seek, SeekFrom, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use windows_sys::Win32::Foundation::GetLastError;
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GetLastError, LocalFree, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER,
+};
+use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY};
 use windows_sys::Win32::Storage::FileSystem::{
-    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    CreateFileW, FlushFileBuffers, MoveFileExW, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE,
+    FILE_SHARE_READ, FILE_SHARE_WRITE, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    OPEN_EXISTING,
 };
 use windows_sys::Win32::System::Memory::{VirtualLock, VirtualUnlock};
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
+use windows_sys::Win32::System::Threading::OpenProcessToken;
 
-fn current_user_principal() -> Option<String> {
-    // Try SID via `whoami /user`
+fn current_user_principals() -> Vec<String> {
+    let mut principals = Vec::new();
+
+    if let Some(sid) = current_user_sid() {
+        principals.push(format!("*{sid}"));
+    }
+
+    // Fallback: Try SID via `whoami /user`
     if let Ok(out) = Command::new("whoami").arg("/user").output() {
         if out.status.success() {
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -23,7 +37,8 @@ fn current_user_principal() -> Option<String> {
                 }
                 if let Some(sid) = line.split_whitespace().last() {
                     if sid.starts_with("S-1-") {
-                        return Some(format!("*{}", sid));
+                        principals.push(format!("*{}", sid));
+                        break;
                     }
                 }
             }
@@ -31,9 +46,59 @@ fn current_user_principal() -> Option<String> {
     }
 
     // Fallback: DOMAIN\USERNAME
-    let user = std::env::var("USERNAME").ok()?;
-    let domain = std::env::var("USERDOMAIN").ok()?;
-    Some(format!("{}\\{}", domain, user))
+    if let (Ok(user), Ok(domain)) = (std::env::var("USERNAME"), std::env::var("USERDOMAIN")) {
+        principals.push(format!("{}\\{}", domain, user));
+    }
+
+    principals.sort();
+    principals.dedup();
+    principals
+}
+
+fn current_user_sid() -> Option<String> {
+    unsafe {
+        let mut token = 0;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return None;
+        }
+
+        let mut needed: u32 = 0;
+        let _ = GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+        if needed == 0 {
+            CloseHandle(token);
+            return None;
+        }
+
+        let mut buf = vec![0u8; needed as usize];
+        let ok = GetTokenInformation(
+            token,
+            TokenUser,
+            buf.as_mut_ptr() as *mut _,
+            needed,
+            &mut needed,
+        );
+        if ok == 0 {
+            CloseHandle(token);
+            return None;
+        }
+
+        let token_user = &*(buf.as_ptr() as *const windows_sys::Win32::Security::TOKEN_USER);
+        let mut sid_str: *mut u16 = std::ptr::null_mut();
+        let ok = ConvertSidToStringSidW(token_user.User.Sid, &mut sid_str);
+        if ok == 0 || sid_str.is_null() {
+            CloseHandle(token);
+            return None;
+        }
+
+        let mut len = 0usize;
+        while *sid_str.add(len) != 0 {
+            len += 1;
+        }
+        let sid = String::from_utf16_lossy(std::slice::from_raw_parts(sid_str, len));
+        LocalFree(sid_str as *mut core::ffi::c_void);
+        CloseHandle(token);
+        Some(sid)
+    }
 }
 
 pub fn harden_process_best_effort() -> Vec<BestEffortFailure> {
@@ -42,14 +107,6 @@ pub fn harden_process_best_effort() -> Vec<BestEffortFailure> {
     // Windows doesn't have a single direct equivalent we can rely on here without
     // additional Win32 APIs/features/crates. Keep as a no-op that succeeds.
     Vec::new()
-}
-
-pub fn lock_key32_best_effort(key: &mut [u8; 32]) -> Option<BestEffortFailure> {
-    lock_bytes_best_effort(&mut key[..])
-}
-
-pub fn unlock_key32_best_effort(key: &mut [u8; 32]) -> Option<BestEffortFailure> {
-    unlock_bytes_best_effort(&mut key[..])
 }
 
 pub fn lock_bytes_best_effort(buf: &mut [u8]) -> Option<BestEffortFailure> {
@@ -136,7 +193,18 @@ pub fn secure_delete_best_effort(path: &Path) -> (Result<(), String>, Vec<BestEf
 
     // Remove.
     match fs::remove_file(&final_path) {
-        Ok(_) => (Ok(()), warns),
+        Ok(_) => {
+            if let Some(parent) = final_path.parent() {
+                if let Some(fail) = fsync_dir_best_effort(parent) {
+                    warns.push(BestEffortFailure {
+                        kind: "windows_secure_delete_dir_fsync_failed",
+                        errno: fail.errno,
+                        msg: "secure delete parent dir fsync failed; delete may be less durable",
+                    });
+                }
+            }
+            (Ok(()), warns)
+        }
         Err(e) => (Err(format!("Remove file failed: {e}")), warns),
     }
 }
@@ -218,61 +286,71 @@ fn icacls_lockdown_best_effort(
     msg: &'static str,
 ) -> Option<BestEffortFailure> {
     let p = path.to_string_lossy().to_string();
-
-    let principal = match current_user_principal() {
-        Some(p) => p,
-        None => {
-            return Some(BestEffortFailure {
-                kind: "windows_user_principal_unresolved",
-                errno: None,
-                msg: "Unable to resolve current user principal for icacls",
-            });
+    let metadata = fs::metadata(path).ok();
+    let mut perms = Vec::new();
+    match metadata {
+        Some(ref meta) if meta.is_dir() => {
+            perms.push("(OI)(CI)(F)");
+            perms.push("(F)");
         }
-    };
+        Some(ref meta) if meta.is_file() => {
+            perms.push("(F)");
+            perms.push("(OI)(CI)(F)");
+        }
+        _ => {
+            perms.push("(F)");
+            perms.push("(OI)(CI)(F)");
+        }
+    }
 
-    let grant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant {}:(F)", principal)])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    if !grant_ok {
+    let principals = current_user_principals();
+    if principals.is_empty() {
         return Some(BestEffortFailure {
-            kind,
+            kind: "windows_user_principal_unresolved",
             errno: None,
-            msg,
+            msg: "Unable to resolve current user principal for icacls",
         });
     }
 
-    let inheritance_ok = Command::new("icacls")
-        .args([&p, "/inheritance:r"])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    for principal in principals {
+        for perm in &perms {
+            let grant_ok = Command::new("icacls")
+                .args([&p, &format!("/grant {}:{perm}", principal)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
 
-    if !inheritance_ok {
-        return Some(BestEffortFailure {
-            kind,
-            errno: None,
-            msg,
-        });
+            if !grant_ok {
+                continue;
+            }
+
+            let inheritance_ok = Command::new("icacls")
+                .args([&p, "/inheritance:r"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+
+            if !inheritance_ok {
+                continue;
+            }
+
+            let regrant_ok = Command::new("icacls")
+                .args([&p, &format!("/grant:r {}:{perm}", principal)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+
+            if regrant_ok {
+                return None;
+            }
+        }
     }
 
-    let regrant_ok = Command::new("icacls")
-        .args([&p, &format!("/grant:r {}:(F)", principal)])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    if regrant_ok {
-        None
-    } else {
-        Some(BestEffortFailure {
-            kind,
-            errno: None,
-            msg,
-        })
-    }
+    Some(BestEffortFailure {
+        kind,
+        errno: None,
+        msg,
+    })
 }
 
 pub fn is_stale_lock(pid: Option<u32>) -> bool {
@@ -317,6 +395,64 @@ pub fn is_stale_lock(pid: Option<u32>) -> bool {
 }
 
 pub fn fsync_dir_best_effort(_dir: &std::path::Path) -> Option<BestEffortFailure> {
+    let wide = |p: &Path| -> Vec<u16> {
+        p.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    };
+
+    let dir = wide(_dir);
+
+    unsafe {
+        let handle = CreateFileW(
+            dir.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            0,
+        );
+
+        if handle == 0 {
+            let errno = GetLastError() as i32;
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_open_failed",
+                errno: Some(errno),
+                msg: "failed to open directory handle for fsync",
+            });
+        }
+
+        let ok = FlushFileBuffers(handle);
+        let flush_errno = if ok == 0 {
+            Some(GetLastError() as i32)
+        } else {
+            None
+        };
+        let close_ok = CloseHandle(handle);
+
+        if close_ok == 0 {
+            let errno = GetLastError() as i32;
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_close_failed",
+                errno: Some(errno),
+                msg: "failed to close directory handle after fsync",
+            });
+        }
+
+        if let Some(errno) = flush_errno {
+            if errno == ERROR_INVALID_PARAMETER as i32 || errno == ERROR_ACCESS_DENIED as i32 {
+                return None;
+            }
+            return Some(BestEffortFailure {
+                kind: "windows_fsync_dir_failed",
+                errno: Some(errno),
+                msg: "directory fsync failed",
+            });
+        }
+    }
+
     None
 }
 

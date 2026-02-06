@@ -1,5 +1,7 @@
 // src/ui/panel_create_keyfile.rs
 
+use crate::ui::widgets;
+
 use super::Route;
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
@@ -38,7 +40,7 @@ impl CreateKeyfilePanel {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
-        ui.heading("Create keyfile");
+        widgets::panel_title(ui, "Create keyfile");
         ui.separator();
 
         let mask = !self.show_passphrase;

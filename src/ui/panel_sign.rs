@@ -59,14 +59,21 @@ impl SignPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        ui.heading("Sign");
+        widgets::panel_title(ui, "Sign");
         ui.separator();
 
         // Active key selector outside scroll area
         let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-        if let Err(e) =
-            widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
-        {
+        let mut active_key_error: Option<AppError> = None;
+        ui.horizontal(|ui| {
+            ui.label("Key:");
+            if let Err(e) =
+                widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
+            {
+                active_key_error = Some(e);
+            }
+        });
+        if let Some(e) = active_key_error {
             if let AppError::KeyfileQuarantined { .. } = e {
                 *route = Route::KeyfileSelect;
                 return;
@@ -165,6 +172,7 @@ impl SignPanel {
                 }
 
                 ui.add_space(10.0);
+                ui.separator();
 
                 // ---- Message (left) + Schema/Config (right)
                 ui.columns(2, |cols| {
@@ -222,7 +230,7 @@ r#"{
 
                 ui.horizontal(|ui| {
                     if ui
-                        .add_enabled(can_sign, egui::Button::new("Sign"))
+                        .add_enabled(can_sign, egui::Button::new(egui::RichText::new("Sign").strong()))
                         .clicked()
                     {
                         self.clear_messages();
@@ -338,8 +346,27 @@ r#"{
                     cols[0].horizontal(|ui| {
                         ui.label(left_label);
                         let ok = !self.output_text.trim().is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy output") {
-                            ui.ctx().copy_text(self.output_text.clone());
+                        let hover = "Copy output";
+                        let copied = if output_mode == SignOutputMode::Record {
+                            widgets::copy_json_icon_button(
+                                ui,
+                                ok,
+                                "Copy output",
+                                self.output_text.trim(),
+                            )
+                        } else {
+                            widgets::copy_icon_button(ui, ok, hover)
+                        };
+                        if copied {
+                            if output_mode == SignOutputMode::Signature {
+                                ui.ctx().copy_text(self.output_text.clone());
+                            }
+                            let msg = if output_mode == SignOutputMode::Record {
+                                "Copied output JSON to clipboard."
+                            } else {
+                                "Copied output to clipboard."
+                            };
+                            self.msg.set_success(msg);
                         }
                     });
 
@@ -350,24 +377,9 @@ r#"{
                             .hint_text("Output will appear here…"),
                     );
 
-                    cols[1].label("Active key");
+                    let w = cols[1].available_width().min(480.0);
 
-                    cols[1].horizontal(|ui| {
-                        ui.label("Public key (hex)");
-                        let ok = !active_pubkey_hex.is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
-                            ui.ctx().copy_text(active_pubkey_hex.clone());
-                        }
-                    });
-                    let mut pk = active_pubkey_hex.clone();
-                    cols[1].add(
-                        egui::TextEdit::singleline(&mut pk)
-                            .interactive(false)
-                            .hint_text("No active key"),
-                    );
-
-                    cols[1].add_space(6.0);
-
+                    // Associated ID
                     cols[1].horizontal(|ui| {
                         ui.label("Associated ID");
                         let ok = !active_assoc_id.is_empty();
@@ -376,11 +388,36 @@ r#"{
                         }
                     });
                     let mut aid = active_assoc_id.clone();
-                    cols[1].add(
-                        egui::TextEdit::singleline(&mut aid)
-                            .interactive(false)
-                            .hint_text("—"),
-                    );
+                    cols[1].scope(|ui| {
+                        ui.set_max_width(w);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut aid)
+                                .desired_width(w)
+                                .interactive(false)
+                                .hint_text("—"),
+                        );
+                    });
+
+                    cols[1].add_space(6.0);
+
+                    // Public key
+                    cols[1].horizontal(|ui| {
+                        ui.label("Public key (hex)");
+                        let ok = !active_pubkey_hex.is_empty();
+                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
+                            ui.ctx().copy_text(active_pubkey_hex.clone());
+                        }
+                    });
+                    let mut pk = active_pubkey_hex.clone();
+                    cols[1].scope(|ui| {
+                        ui.set_max_width(w);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut pk)
+                                .desired_width(w)
+                                .interactive(false),
+                        );
+                    });
+
                 });
             });
     }

@@ -1,7 +1,7 @@
 // src/ui/panel_document_wizard.rs
 
 use crate::ui::message::PanelMsgState;
-use crate::ui::widgets::ui_notice;
+use crate::ui::widgets;
 use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
@@ -86,7 +86,8 @@ impl DocumentWizardPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        ui.heading("Document Wizard");
+        widgets::panel_title(ui, "Document wizard");
+        ui.separator();
         ui.add_space(6.0);
 
         egui::ScrollArea::vertical()
@@ -289,7 +290,7 @@ impl DocumentWizardPanel {
         if let Ok(d) = dw::current_doc(wiz) {
             if !d.template_errors.is_empty() {
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("Template problems (must fix)").strong());
+                    widgets::section_header(ui, "Template problems (must fix)");
                     for e in d.template_errors.iter() {
                         ui.label(format!("- {e}"));
                     }
@@ -299,7 +300,7 @@ impl DocumentWizardPanel {
 
             if !d.template_warnings.is_empty() {
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("Template warnings").strong());
+                    widgets::section_header(ui, "Template warnings");
                     for w in d.template_warnings.iter() {
                         ui.label(format!("- {w}"));
                     }
@@ -358,14 +359,14 @@ impl DocumentWizardPanel {
 
         // Navigation (placed below the current screen content).
         ui_doc_screen_skeleton(ui, None, |ui| {
-            let button_height = 32.0;
+            let button_height = 34.0;
             let next_w = 120.0;
             let back_w = 110.0;
 
             ui.horizontal(|ui| {
                 // Back on the left.
-                let back_btn = egui::Button::new(egui::RichText::new("← Back").size(16.0))
-                    .min_size(egui::vec2(back_w, button_height));
+                let back_btn =
+                    widgets::large_button("← Back").min_size(egui::vec2(back_w, button_height));
 
                 if ui.add_enabled(can_back, back_btn).clicked() {
                     if let Err(e) = step_back(wiz, section_index, phase) {
@@ -377,8 +378,8 @@ impl DocumentWizardPanel {
 
                 // Next on the right, same baseline and height.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let next_btn = egui::Button::new(egui::RichText::new("Next →").size(16.0))
-                        .min_size(egui::vec2(next_w, button_height));
+                    let next_btn =
+                        widgets::large_button("Next →").min_size(egui::vec2(next_w, button_height));
 
                     if ui.add_enabled(can_next, next_btn).clicked() {
                         if *phase == WizardStepPhase::Inputs {
@@ -424,7 +425,7 @@ impl DocumentWizardPanel {
         route: &mut Route,
         route_prefill: &mut Option<RoutePrefill>,
     ) {
-        ui.heading("Review & Build");
+        ui.heading("Review Document Bundle & Sign");
         ui.add_space(6.0);
 
         let can_build = all_docs_have_no_template_errors(wiz);
@@ -442,6 +443,113 @@ impl DocumentWizardPanel {
             }
         }
 
+        // This panel should be unreachable when there are template failures, but keep a defensive guard.
+        if !can_build {
+            ui.group(|ui| {
+                widgets::section_header(ui, "Cannot build: template has hard failures.");
+                ui.label("Go back and review the template problems.");
+            });
+            ui.add_space(6.0);
+
+            if ui.button("Back").clicked() {
+                *mode = WizardPanelMode::EditDocs;
+                bundle_out.clear();
+                *bundle_build_attempted = false;
+                msg.clear();
+            }
+            return;
+        }
+
+        // Explanatory text (kept near the main header; constrained width so it doesn't run edge-to-edge).
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                let w = ui.available_width().min(950.0);
+                ui.set_max_width(w);
+
+                ui.label("The document bundle below represents one or more documents.");
+                ui.label("It includes, for each document: (1) the raw document text hash, (2) the collected inputs, and (3) tags that will be replaced at signing time.");
+                ui.label("Those signing-time tags will be replaced with the signing UTC datetime and the associated key id for the key you sign with.");
+            },
+        );
+
+        ui.add_space(18.0);
+        ui.separator();
+
+        let gap = 16.0_f32;
+        let avail = ui.available_width().max(1.0);
+
+        // Keep the hash column readable even on narrow windows.
+        let right_w = (avail * 0.34).clamp(260.0, 420.0);
+        let left_w = (avail - gap - right_w).max(260.0);
+
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(left_w, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.horizontal(|ui| {
+                        widgets::section_header(ui, "Document bundle");
+
+                        let can_copy = !bundle_out.trim().is_empty();
+                        if widgets::copy_json_icon_button(
+                            ui,
+                            can_copy,
+                            "Copy document bundle",
+                            bundle_out.trim(),
+                        ) {
+                            msg.set_success("Copied document bundle JSON to clipboard.");
+                        }
+                    });
+
+                    ui.add_space(6.0);
+
+                    ui.add(
+                        egui::TextEdit::multiline(bundle_out)
+                            .desired_rows(12)
+                            .code_editor()
+                            .lock_focus(true),
+                    );
+                },
+            );
+
+            ui.add_space(gap);
+
+            ui.allocate_ui_with_layout(
+                egui::vec2(right_w, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    widgets::section_header(ui, "Individual document hashes");
+                    ui.add_space(6.0);
+
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            for (i, d) in wiz.docs.iter().enumerate() {
+                                let title = format!(
+                                    "Doc {}/{} — {}",
+                                    i + 1,
+                                    wiz.docs.len(),
+                                    d.doc_identity.label
+                                );
+
+                                egui::CollapsingHeader::new(title).default_open(false).show(
+                                    ui,
+                                    |ui| {
+                                        ui.label(format!("Computed hash: {}", d.computed_hash_hex));
+                                    },
+                                );
+
+                                ui.add_space(4.0);
+                            }
+                        });
+                },
+            );
+        });
+
+        ui.add_space(10.0);
+
         ui.horizontal(|ui| {
             if ui.button("Back").clicked() {
                 *mode = WizardPanelMode::EditDocs;
@@ -452,7 +560,10 @@ impl DocumentWizardPanel {
 
             let can_sign_bundle = !bundle_out.trim().is_empty();
             if ui
-                .add_enabled(can_sign_bundle, egui::Button::new("Sign Document Bundle"))
+                .add_enabled(
+                    can_sign_bundle,
+                    egui::Button::new(egui::RichText::new("Sign Document Bundle").strong()),
+                )
                 .clicked()
             {
                 *route_prefill = Some(RoutePrefill::ToSign {
@@ -463,87 +574,6 @@ impl DocumentWizardPanel {
                 *route = Route::Sign;
             }
         });
-
-        ui.add_space(6.0);
-
-        if !all_docs_have_no_template_errors(wiz) {
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("Cannot build: template has hard failures.").strong());
-                ui.label("Go back and review the template problems.");
-            });
-            ui.add_space(6.0);
-        }
-
-        for (i, d) in wiz.docs.iter().enumerate() {
-            let title = format!(
-                "Doc {}/{} — {}",
-                i + 1,
-                wiz.docs.len(),
-                d.doc_identity.label
-            );
-            egui::CollapsingHeader::new(title)
-                .default_open(false)
-                .show(ui, |ui| {
-                    if !d.template_errors.is_empty() {
-                        ui.label("Template problems (must fix):");
-                        for e in d.template_errors.iter() {
-                            ui.label(format!("- {e}"));
-                        }
-                        ui.add_space(6.0);
-                    }
-
-                    if !d.template_warnings.is_empty() {
-                        ui.label("Template warnings:");
-                        for w in d.template_warnings.iter() {
-                            ui.label(format!("- {w}"));
-                        }
-                        ui.add_space(6.0);
-                    }
-
-                    ui.label(format!(
-                        "Hash: expected {} | computed {}",
-                        d.expected_hash_hex, d.computed_hash_hex
-                    ));
-                });
-
-            ui.add_space(4.0);
-        }
-
-        ui.separator();
-        ui.add_space(6.0);
-
-        ui.group(|ui| {
-            ui.label("The document bundle below represents one or more documents.");
-            ui.label("It includes, for each document: (1) the raw document text hash, (2) the collected inputs, and (3) tags that will be replaced at signing time.");
-            ui.label("Those signing-time tags will be replaced with the signing UTC datetime and the associated key id for the key you sign with.");
-        });
-
-        ui.add_space(6.0);
-
-        ui.add(
-            egui::TextEdit::multiline(bundle_out)
-                .desired_rows(10)
-                .code_editor()
-                .lock_focus(true),
-        );
-
-        ui.separator();
-        ui.add_space(6.0);
-
-        if ui.button("Copy Document Bundle to Clipboard").clicked() {
-            match wiz.docs.get(wiz.doc_index) {
-                Some(d) => {
-                    let raw = sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections(
-                d.sections.iter().map(|s| s.text.as_str()),
-            );
-                    ui.ctx().copy_text(raw);
-                    msg.set_success("Copied raw document text to clipboard.");
-                }
-                None => {
-                    msg.set_warn("No current document is selected.");
-                }
-            }
-        }
     }
 }
 
@@ -561,7 +591,7 @@ fn ui_doc_screen_skeleton(
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 if let Some(h) = header {
-                    ui.label(egui::RichText::new(h).strong().size(18.0));
+                    widgets::screen_header(ui, h);
                     ui.add_space(6.0);
                 }
                 body(ui);
@@ -582,28 +612,13 @@ fn ui_doc_screen_skeleton_notice_above_header(
         egui::Frame::NONE
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
-                ui_centered_notice(ui, ui.available_width(), notice);
+                widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new(header).strong().size(18.0));
+                widgets::screen_header(ui, header);
                 ui.add_space(6.0);
                 body(ui);
             });
     });
-}
-
-fn ui_centered_notice(ui: &mut egui::Ui, page_w: f32, text: &str) {
-    // Slightly narrower than the text column, centered above the page content.
-    let notice_w = (page_w * 0.92).min(page_w);
-
-    ui.allocate_ui_with_layout(
-        egui::vec2(page_w, 0.0),
-        egui::Layout::top_down(egui::Align::Center),
-        |ui| {
-            ui.set_max_width(notice_w);
-            // ui_notice should naturally left-align; we are only centering the container.
-            ui_notice(ui, text);
-        },
-    );
 }
 
 fn ui_doc_text_window(ui: &mut egui::Ui, code: &mut String) {
@@ -668,7 +683,7 @@ fn ui_section_inputs(
 ) {
     ui.group(|ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.label(egui::RichText::new("Inputs").strong().size(18.0));
+            widgets::section_header(ui, "Inputs");
             ui.add_space(6.0);
 
             if specs.is_empty() {
