@@ -6,7 +6,9 @@ use std::io::{Seek, SeekFrom, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GetLastError, LocalFree, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER,
+};
 use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY};
 use windows_sys::Win32::Storage::FileSystem::{
@@ -423,6 +425,11 @@ pub fn fsync_dir_best_effort(_dir: &std::path::Path) -> Option<BestEffortFailure
         }
 
         let ok = FlushFileBuffers(handle);
+        let flush_errno = if ok == 0 {
+            Some(GetLastError() as i32)
+        } else {
+            None
+        };
         let close_ok = CloseHandle(handle);
 
         if close_ok == 0 {
@@ -434,8 +441,10 @@ pub fn fsync_dir_best_effort(_dir: &std::path::Path) -> Option<BestEffortFailure
             });
         }
 
-        if ok == 0 {
-            let errno = GetLastError() as i32;
+        if let Some(errno) = flush_errno {
+            if errno == ERROR_INVALID_PARAMETER as i32 || errno == ERROR_ACCESS_DENIED as i32 {
+                return None;
+            }
             return Some(BestEffortFailure {
                 kind: "windows_fsync_dir_failed",
                 errno: Some(errno),
