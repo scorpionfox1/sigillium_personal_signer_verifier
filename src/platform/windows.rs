@@ -339,6 +339,12 @@ fn icacls_lockdown_best_effort(
                 return None;
             }
         }
+
+        Some(BestEffortFailure {
+            kind,
+            errno: None,
+            msg,
+        })
     }
 }
 
