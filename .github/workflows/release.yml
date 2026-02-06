@@ -12,6 +12,7 @@ jobs:
   build-and-release:
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-22.04
@@ -35,7 +36,6 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           OS="${{ runner.os }}"
           ARCH="$(uname -m)"
-
           OUT="${PKG}-${TAG}-${OS}-${ARCH}"
           cp "target/release/$BIN" "$OUT"
           tar -czf "$OUT.tar.gz" "$OUT"
@@ -50,7 +50,6 @@ jobs:
           $os   = "Windows"
           $arch = $env:PROCESSOR_ARCHITECTURE
           if ($arch -eq "AMD64") { $arch = "x86_64" }
-
           $out = "$pkg-$tag-$os-$arch.exe"
           Copy-Item "target\release\$bin" $out
 
@@ -60,6 +59,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
           files: |
             *.tar.gz
 
@@ -69,5 +70,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
           files: |
             *.exe
