@@ -523,14 +523,13 @@ impl DocumentWizardPanel {
                         widgets::section_header(ui, "Document bundle");
 
                         let can_copy = !bundle_out.trim().is_empty();
-                        if widgets::copy_json_icon_button(
+                        widgets::copy_json_icon_button(
                             ui,
                             can_copy,
                             "Copy document bundle",
                             bundle_out.trim(),
-                        ) {
-                            msg.set_success("Copied document bundle JSON to clipboard.");
-                        }
+                            msg,
+                        );
                     });
 
                     ui.add_space(6.0);
@@ -619,13 +618,16 @@ impl DocumentWizardPanel {
     }
 }
 
-fn ui_doc_screen_skeleton(
+const DOC_PANEL_MAX_WIDTH: f32 = 900.0;
+
+fn ui_doc_screen_skeleton_with_max_width(
     ui: &mut egui::Ui,
     header: Option<&str>,
+    max_width: f32,
     body: impl FnOnce(&mut egui::Ui),
 ) {
     ui.vertical_centered(|ui| {
-        let w = ui.available_width().min(1250.0);
+        let w = ui.available_width().min(max_width);
         ui.set_width(w);
 
         // Intentionally no border: keep it boring and clean.
@@ -639,6 +641,14 @@ fn ui_doc_screen_skeleton(
                 body(ui);
             });
     });
+}
+
+fn ui_doc_screen_skeleton(
+    ui: &mut egui::Ui,
+    header: Option<&str>,
+    body: impl FnOnce(&mut egui::Ui),
+) {
+    ui_doc_screen_skeleton_with_max_width(ui, header, DOC_PANEL_MAX_WIDTH, body);
 }
 
 fn doc_raw_text(doc: &dw::DocRunState) -> String {
@@ -753,19 +763,12 @@ fn ui_doc_screen_skeleton_notice_above_header(
     notice: &str,
     body: impl FnOnce(&mut egui::Ui),
 ) {
-    ui.vertical_centered(|ui| {
-        let w = ui.available_width().min(1250.0);
-        ui.set_width(w);
-
-        egui::Frame::NONE
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
-                ui.add_space(8.0);
-                widgets::screen_header(ui, header);
-                ui.add_space(6.0);
-                body(ui);
-            });
+    ui_doc_screen_skeleton_with_max_width(ui, None, DOC_PANEL_MAX_WIDTH, |ui| {
+        widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
+        ui.add_space(8.0);
+        widgets::screen_header(ui, header);
+        ui.add_space(6.0);
+        body(ui);
     });
 }
 

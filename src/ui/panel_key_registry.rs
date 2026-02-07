@@ -100,11 +100,25 @@ impl KeyRegistryPanel {
                 ui.add_space(6.0);
 
                 if has_active_key {
-                    copyable_readonly_field(ui, "Label", active_label.as_str(), "Copy label", None);
+                    copyable_readonly_field(
+                        ui,
+                        "Label",
+                        active_label.as_str(),
+                        "Copy label",
+                        None,
+                        &mut self.msg,
+                    );
 
                     ui.add_space(6.0);
 
-                    copyable_readonly_field(ui, "Domain", &active_domain, "Copy domain", None);
+                    copyable_readonly_field(
+                        ui,
+                        "Domain",
+                        &active_domain,
+                        "Copy domain",
+                        None,
+                        &mut self.msg,
+                    );
 
                     ui.add_space(6.0);
 
@@ -114,6 +128,7 @@ impl KeyRegistryPanel {
                         &active_assoc_id,
                         "Copy associated ID",
                         Some("—"),
+                        &mut self.msg,
                     );
 
                     ui.add_space(6.0);
@@ -124,6 +139,7 @@ impl KeyRegistryPanel {
                         &active_pubkey_hex,
                         "Copy public key",
                         Some("No active key"),
+                        &mut self.msg,
                     );
                 }
 
@@ -315,8 +331,9 @@ fn copyable_readonly_field(
     value: &str,
     hover: &str,
     hint: Option<&str>,
+    msg: &mut PanelMsgState,
 ) {
-    widgets::copy_label_with_button(ui, label, value, hover);
+    widgets::copy_label_with_button(ui, label, value, hover, msg);
     let mut v = value.to_string();
     let mut field = egui::TextEdit::singleline(&mut v).interactive(false);
     if let Some(hint) = hint {

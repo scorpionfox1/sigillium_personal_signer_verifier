@@ -180,9 +180,13 @@ impl SignPanel {
                     cols[0].horizontal(|ui| {
                         ui.label("Message");
                         let ok = !self.message.trim().is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy message") {
-                            ui.ctx().copy_text(self.message.clone());
-                        }
+                        widgets::copy_value_with_button(
+                            ui,
+                            ok,
+                            "Copy message",
+                            &self.message,
+                            &mut self.msg,
+                        );
                     });
 
                     cols[0].add(
@@ -347,25 +351,22 @@ r#"{
                         ui.label(left_label);
                         let ok = !self.output_text.trim().is_empty();
                         let hover = "Copy output";
-                        let copied = if output_mode == SignOutputMode::Record {
+                        if output_mode == SignOutputMode::Record {
                             widgets::copy_json_icon_button(
                                 ui,
                                 ok,
                                 "Copy output",
                                 self.output_text.trim(),
-                            )
+                                &mut self.msg,
+                            );
                         } else {
-                            widgets::copy_icon_button(ui, ok, hover)
-                        };
-                        if copied {
-                            if output_mode == SignOutputMode::Signature {
-                                ui.ctx().copy_text(self.output_text.clone());
-                            }
-
-                            let err = AppNotice::StringCopied;
-
-                            let um = err.user_msg();
-                            self.msg.set_success(um.short);
+                            widgets::copy_value_with_button(
+                                ui,
+                                ok,
+                                hover,
+                                &self.output_text,
+                                &mut self.msg,
+                            );
                         }
                     });
 
@@ -382,9 +383,13 @@ r#"{
                     cols[1].horizontal(|ui| {
                         ui.label("Associated ID");
                         let ok = !active_assoc_id.is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy associated ID") {
-                            ui.ctx().copy_text(active_assoc_id.clone());
-                        }
+                        widgets::copy_value_with_button(
+                            ui,
+                            ok,
+                            "Copy associated ID",
+                            &active_assoc_id,
+                            &mut self.msg,
+                        );
                     });
                     let mut aid = active_assoc_id.clone();
                     cols[1].scope(|ui| {
@@ -403,9 +408,13 @@ r#"{
                     cols[1].horizontal(|ui| {
                         ui.label("Public key (hex)");
                         let ok = !active_pubkey_hex.is_empty();
-                        if widgets::copy_icon_button(ui, ok, "Copy public key") {
-                            ui.ctx().copy_text(active_pubkey_hex.clone());
-                        }
+                        widgets::copy_value_with_button(
+                            ui,
+                            ok,
+                            "Copy public key",
+                            &active_pubkey_hex,
+                            &mut self.msg,
+                        );
                     });
                     let mut pk = active_pubkey_hex.clone();
                     cols[1].scope(|ui| {

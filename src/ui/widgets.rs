@@ -9,18 +9,41 @@ use sigillium_personal_signer_verifier_lib::{
     types::{AppState, KeyId, KeyMeta},
 };
 
+use super::message::PanelMsgState;
+
 pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
     ui.add_enabled(enabled, egui::Button::new("⧉"))
         .on_hover_text(hover)
         .clicked()
 }
 
-pub fn copy_json_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str, value: &str) -> bool {
+fn notify_string_copied(msg: &mut PanelMsgState) {
+    msg.from_app_error(&AppNotice::StringCopied);
+}
+
+pub fn copy_value_with_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    hover: &str,
+    value: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
     if copy_icon_button(ui, enabled, hover) {
         ui.ctx().copy_text(value.to_string());
+        notify_string_copied(msg);
         return true;
     }
     false
+}
+
+pub fn copy_json_icon_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    hover: &str,
+    value: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
+    copy_value_with_button(ui, enabled, hover, value, msg)
 }
 
 const LARGE_BUTTON_TEXT_SIZE: f32 = 17.0;
@@ -58,13 +81,18 @@ pub fn panel_title(ui: &mut egui::Ui, label: &str) {
     ui.label(egui::RichText::new(label).strong().size(heading_size));
 }
 
-pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
+pub fn copy_label_with_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &str,
+    hover: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
     let mut copied = false;
     ui.horizontal(|ui| {
         ui.label(label);
         let ok = !value.trim().is_empty();
-        if copy_icon_button(ui, ok, hover) {
-            ui.ctx().copy_text(value.to_string());
+        if copy_value_with_button(ui, ok, hover, value, msg) {
             copied = true;
         }
     });

@@ -115,7 +115,13 @@ impl VerifyPanel {
                 });
 
                 if let Some(pk) = active_pubkey_hex.as_deref() {
-                    widgets::copy_label_with_button(ui, "Public key (hex)", pk, "Copy public key");
+                    widgets::copy_label_with_button(
+                        ui,
+                        "Public key (hex)",
+                        pk,
+                        "Copy public key",
+                        &mut self.msg,
+                    );
                 } else {
                     ui.label("Public key (hex)");
                 }
@@ -137,6 +143,7 @@ impl VerifyPanel {
                     "Signature (base64)",
                     &self.signature_b64,
                     "Copy signature",
+                    &mut self.msg,
                 );
 
                 ui.add(
@@ -154,9 +161,13 @@ impl VerifyPanel {
                 ui.horizontal(|ui| {
                     ui.label(message_label);
                     let ok = !self.message.trim().is_empty();
-                    if widgets::copy_icon_button(ui, ok, "Copy message") {
-                        ui.ctx().copy_text(self.message.clone());
-                    }
+                    widgets::copy_value_with_button(
+                        ui,
+                        ok,
+                        "Copy message",
+                        &self.message,
+                        &mut self.msg,
+                    );
                 });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.message)
