@@ -8,7 +8,6 @@ use sigillium_personal_signer_verifier_lib::context::AppCtx;
 use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{Route, RoutePrefill};
 
@@ -311,7 +310,7 @@ impl DocumentWizardPanel {
             }
         }
 
-        let mut markdown_preview: Option<MarkdownPreview> = None;
+        let mut markdown_preview: Option<(String, String)> = None;
 
         // Centerpiece: section text / translation / inputs.
         match *phase {
@@ -321,10 +320,7 @@ impl DocumentWizardPanel {
                     return;
                 };
 
-                markdown_preview = Some(MarkdownPreview {
-                    title: "About this Document".to_string(),
-                    body: about.to_string(),
-                });
+                markdown_preview = Some(("About this Document".to_string(), about.to_string()));
 
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
@@ -344,10 +340,7 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
-                markdown_preview = Some(MarkdownPreview {
-                    title: format!("{} (section)", doc_label),
-                    body: section.text.clone(),
-                });
+                markdown_preview = Some((format!("{} (section)", doc_label), section.text.clone()));
                 ui_section_text(ui, &doc_label, section);
             }
             WizardStepPhase::Translation => {
@@ -356,10 +349,10 @@ impl DocumentWizardPanel {
                     return;
                 };
                 if let Some(translation) = section.translation.as_ref() {
-                    markdown_preview = Some(MarkdownPreview {
-                        title: format!("{} (translation)", doc_label),
-                        body: translation.text.clone(),
-                    });
+                    markdown_preview = Some((
+                        format!("{} (translation)", doc_label),
+                        translation.text.clone(),
+                    ));
                 }
                 ui_section_translation(ui, &doc_label, section);
             }
@@ -401,8 +394,8 @@ impl DocumentWizardPanel {
                     .add_enabled(markdown_preview.is_some(), preview_btn)
                     .clicked()
                 {
-                    if let Some(preview) = markdown_preview.as_ref() {
-                        open_markdown_preview(preview, msg);
+                    if let Some((title, body)) = markdown_preview.as_ref() {
+                        widgets::open_markdown_preview(title, body, msg);
                     }
                 }
 
@@ -618,37 +611,12 @@ impl DocumentWizardPanel {
     }
 }
 
-const DOC_PANEL_MAX_WIDTH: f32 = 900.0;
-
-fn ui_doc_screen_skeleton_with_max_width(
-    ui: &mut egui::Ui,
-    header: Option<&str>,
-    max_width: f32,
-    body: impl FnOnce(&mut egui::Ui),
-) {
-    ui.vertical_centered(|ui| {
-        let w = ui.available_width().min(max_width);
-        ui.set_width(w);
-
-        // Intentionally no border: keep it boring and clean.
-        egui::Frame::NONE
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                if let Some(h) = header {
-                    widgets::screen_header(ui, h);
-                    ui.add_space(6.0);
-                }
-                body(ui);
-            });
-    });
-}
-
 fn ui_doc_screen_skeleton(
     ui: &mut egui::Ui,
     header: Option<&str>,
     body: impl FnOnce(&mut egui::Ui),
 ) {
-    ui_doc_screen_skeleton_with_max_width(ui, header, DOC_PANEL_MAX_WIDTH, body);
+    widgets::doc_panel_container_with_header(ui, header, body);
 }
 
 fn doc_raw_text(doc: &dw::DocRunState) -> String {
@@ -673,97 +641,13 @@ fn default_raw_text_filename(index: usize, label: &str) -> String {
     }
 }
 
-struct MarkdownPreview {
-    title: String,
-    body: String,
-}
-
-fn open_markdown_preview(preview: &MarkdownPreview, msg: &mut PanelMsgState) {
-    let html = markdown_preview_to_html(preview);
-    let filename = temp_markdown_filename();
-    let path = std::env::temp_dir().join(filename);
-
-    if let Err(e) = std::fs::write(&path, html) {
-        msg.set_warn(&format!("Failed to write preview HTML: {e}"));
-        return;
-    }
-
-    let Some(path_str) = path.to_str() else {
-        msg.set_warn("Failed to open preview: temp path is not valid UTF-8.");
-        return;
-    };
-
-    if let Err(e) = webbrowser::open(path_str) {
-        msg.set_warn(&format!("Failed to open preview in browser: {e}"));
-        return;
-    }
-
-    msg.set_success(&format!("Opened preview in browser: {}", path.display()));
-}
-
-fn markdown_preview_to_html(preview: &MarkdownPreview) -> String {
-    use pulldown_cmark::{html, Options, Parser};
-
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_TASKLISTS);
-    options.insert(Options::ENABLE_SMART_PUNCTUATION);
-
-    let parser = Parser::new_ext(&preview.body, options);
-    let mut body_html = String::new();
-    html::push_html(&mut body_html, parser);
-
-    format!(
-        r#"<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>{}</title>
-  <style>
-    body {{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; line-height: 1.5; }}
-    pre, code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-    pre {{ padding: 12px; background: #f4f4f4; overflow-x: auto; }}
-    table {{ border-collapse: collapse; }}
-    th, td {{ border: 1px solid #ccc; padding: 6px 10px; }}
-  </style>
-</head>
-<body>
-  <h1>{}</h1>
-  {}
-</body>
-</html>
-"#,
-        escape_html(&preview.title),
-        escape_html(&preview.title),
-        body_html
-    )
-}
-
-fn temp_markdown_filename() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    format!("sigillium-docwizard-preview-{}.html", nanos)
-}
-
-fn escape_html(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
 fn ui_doc_screen_skeleton_notice_above_header(
     ui: &mut egui::Ui,
     header: &str,
     notice: &str,
     body: impl FnOnce(&mut egui::Ui),
 ) {
-    ui_doc_screen_skeleton_with_max_width(ui, None, DOC_PANEL_MAX_WIDTH, |ui| {
+    widgets::doc_panel_container(ui, |ui| {
         widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
         ui.add_space(8.0);
         widgets::screen_header(ui, header);

@@ -60,7 +60,8 @@ pub fn select_active_key(key_id: KeyId, state: &AppState, ctx: &AppCtx) -> AppRe
         };
 
         {
-            let mut session = lock_session(state).map_err(|_| AppNotice::InternalStateLockFailed)?;
+            let mut session =
+                lock_session(state).map_err(|_| AppNotice::InternalStateLockFailed)?;
             if !session.unlocked {
                 return Err(AppNotice::AppLocked);
             }
@@ -131,7 +132,8 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
         };
 
         if let Err(_e) = keyfile::validate_keyfile_structure_on_disk(&keyfile_path) {
-            lock_app_inner_if_unlocked(state, "unlock_integrity_failure").map_err(AppNotice::Msg)?;
+            lock_app_inner_if_unlocked(state, "unlock_integrity_failure")
+                .map_err(AppNotice::Msg)?;
 
             let dir_name = ctx
                 .selected_keyfile_dir()
@@ -156,7 +158,8 @@ pub fn unlock_app(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppResult
         }
 
         {
-            let mut session = lock_session(state).map_err(|_| AppNotice::InternalStateLockFailed)?;
+            let mut session =
+                lock_session(state).map_err(|_| AppNotice::InternalStateLockFailed)?;
             session.unlocked = true;
             session.active_key_id = None;
             session.active_associated_key_id = None;
