@@ -12,7 +12,7 @@ pub mod sign_verify;
 
 // --- Public façade (same function names as before) ---
 
-use crate::error::{AppError, AppResult};
+use crate::notices::{AppNotice, AppResult};
 pub use json_ops::validate_json_2020_12;
 pub use keyfile_lifecycle::create_keyfile;
 pub use keyfile_mutation::{change_passphrase, install_key, uninstall_active_key};
@@ -23,18 +23,18 @@ pub use sign_verify::{sign_message, verify_message};
 
 pub(super) fn validate_passphrase(pass: &str) -> AppResult<()> {
     if pass.trim().is_empty() {
-        return Err(AppError::PassphraseRequired);
+        return Err(AppNotice::PassphraseRequired);
     }
 
     const MIN_LEN: usize = 15;
     if pass.len() < MIN_LEN {
-        return Err(AppError::PassphraseTooShort { min: MIN_LEN });
+        return Err(AppNotice::PassphraseTooShort { min: MIN_LEN });
     }
 
     // Prevent ridiculous inputs / DoS-y KDF cost.
     const MAX_LEN: usize = 4096;
     if pass.len() > MAX_LEN {
-        return Err(AppError::PassphraseTooLong { max: MAX_LEN });
+        return Err(AppNotice::PassphraseTooLong { max: MAX_LEN });
     }
 
     Ok(())
@@ -43,7 +43,7 @@ pub(super) fn validate_passphrase(pass: &str) -> AppResult<()> {
 pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     let metas = crate::command_state::with_master_key(state, |k| {
         keyfile::list_key_meta(&keyfile_path, &*k)
@@ -52,7 +52,7 @@ pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResul
     let mut keys = state
         .keys
         .lock()
-        .map_err(|_| AppError::InternalStateLockFailed)?;
+        .map_err(|_| AppNotice::InternalStateLockFailed)?;
 
     *keys = metas;
 
@@ -62,13 +62,13 @@ pub(super) fn refresh_key_meta_cache(state: &AppState, ctx: &AppCtx) -> AppResul
 // Unlock-time sanity checks (NOT strength policy).
 pub(super) fn validate_passphrase_for_unlock(pass: &str) -> AppResult<()> {
     if pass.trim().is_empty() {
-        return Err(AppError::PassphraseRequired);
+        return Err(AppNotice::PassphraseRequired);
     }
 
     // Prevent ridiculous inputs / DoS-y KDF cost.
     const MAX_LEN: usize = 4096;
     if pass.len() > MAX_LEN {
-        return Err(AppError::PassphraseTooLong { max: MAX_LEN });
+        return Err(AppNotice::PassphraseTooLong { max: MAX_LEN });
     }
 
     Ok(())

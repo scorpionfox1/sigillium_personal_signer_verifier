@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-pub type AppResult<T> = Result<T, AppError>;
+pub type AppResult<T> = Result<T, AppNotice>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UserMsgKind {
@@ -20,7 +20,7 @@ pub struct UserMsg {
 }
 
 #[derive(Debug)]
-pub enum AppError {
+pub enum AppNotice {
     // --------------------------------------------------
     // generic / plumbing
     // --------------------------------------------------
@@ -34,6 +34,7 @@ pub enum AppError {
     NoActiveKeySelected,
     KeyfileMissingOrCorrupted,
     KeyfileQuarantined { dir_name: String },
+    StringCopied,
 
     // --------------------------------------------------
     // keyfile fs (IO / durability / locking)
@@ -135,9 +136,9 @@ pub enum AppError {
     PassphraseTooLong { max: usize },
 }
 
-impl AppError {
+impl AppNotice {
     pub fn user_msg(&self) -> UserMsg {
-        use AppError::*;
+        use AppNotice::*;
 
         let mut kind = UserMsgKind::Error;
         let detail = Some(self.to_string());
@@ -155,6 +156,10 @@ impl AppError {
             KeyfileQuarantined { .. } => {
                 kind = UserMsgKind::Warn;
                 "Keyfile was corrupted and quarantined."
+            }
+            StringCopied => {
+                kind = UserMsgKind::Info;
+                "String copied to clipboard."
             }
 
             // keyfile fs
@@ -262,9 +267,9 @@ impl AppError {
     }
 }
 
-impl fmt::Display for AppError {
+impl fmt::Display for AppNotice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use AppError::*;
+        use AppNotice::*;
 
         match self {
             Io(e) => write!(f, "io error: {e}"),
@@ -278,6 +283,9 @@ impl fmt::Display for AppError {
             KeyfileMissingOrCorrupted => write!(f, "keyfile missing or corrupted"),
             KeyfileQuarantined { dir_name } => {
                 write!(f, "keyfile corrupted and quarantined: {dir_name}")
+            }
+            StringCopied => {
+                write!(f, "String copied to clipboard")
             }
 
             KeyfileFsReadFailed(s) => write!(f, "keyfile read failed: {s}"),
@@ -365,10 +373,10 @@ impl fmt::Display for AppError {
     }
 }
 
-impl std::error::Error for AppError {}
+impl std::error::Error for AppNotice {}
 
-impl From<std::io::Error> for AppError {
+impl From<std::io::Error> for AppNotice {
     fn from(e: std::io::Error) -> Self {
-        AppError::Io(e)
+        AppNotice::Io(e)
     }
 }

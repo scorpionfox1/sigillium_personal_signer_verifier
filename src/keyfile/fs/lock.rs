@@ -1,6 +1,6 @@
 // src/keyfile/fs/lock.rs
 
-use crate::error::{AppError, AppResult};
+use crate::notices::{AppNotice, AppResult};
 use crate::platform::is_stale_lock;
 
 use rand::rngs::OsRng;
@@ -32,9 +32,9 @@ pub(crate) fn acquire_keyfile_lock(keyfile_path: &Path) -> AppResult<KeyfileLock
     let lock_path = lock_path_for(keyfile_path)?;
     let parent = lock_path
         .parent()
-        .ok_or_else(|| AppError::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
+        .ok_or_else(|| AppNotice::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
 
-    fs::create_dir_all(parent).map_err(|e| AppError::KeyfileFsLockFailed(e.to_string()))?;
+    fs::create_dir_all(parent).map_err(|e| AppNotice::KeyfileFsLockFailed(e.to_string()))?;
 
     let mut opts = OpenOptions::new();
     opts.create_new(true).write(true);
@@ -50,16 +50,16 @@ pub(crate) fn acquire_keyfile_lock(keyfile_path: &Path) -> AppResult<KeyfileLock
                 let _ = fs::remove_file(&lock_path);
                 match open_new_lockfile(&opts, &lock_path) {
                     Ok(lock) => Ok(lock),
-                    Err(OpenLockError::AlreadyExists) => Err(AppError::KeyfileFsBusy),
+                    Err(OpenLockError::AlreadyExists) => Err(AppNotice::KeyfileFsBusy),
                     Err(OpenLockError::Other(e)) => {
-                        Err(AppError::KeyfileFsLockFailed(e.to_string()))
+                        Err(AppNotice::KeyfileFsLockFailed(e.to_string()))
                     }
                 }
             } else {
-                Err(AppError::KeyfileFsBusy)
+                Err(AppNotice::KeyfileFsBusy)
             }
         }
-        Err(OpenLockError::Other(e)) => Err(AppError::KeyfileFsLockFailed(e.to_string())),
+        Err(OpenLockError::Other(e)) => Err(AppNotice::KeyfileFsLockFailed(e.to_string())),
     }
 }
 
@@ -191,7 +191,7 @@ fn lock_is_stale(lock_path: &Path) -> bool {
 fn lock_path_for(keyfile_path: &Path) -> AppResult<PathBuf> {
     let parent = keyfile_path
         .parent()
-        .ok_or_else(|| AppError::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
+        .ok_or_else(|| AppNotice::KeyfileFsLockFailed("invalid keyfile path".to_string()))?;
 
     let fname = keyfile_path
         .file_name()
@@ -246,7 +246,7 @@ mod tests {
         let _guard = acquire_keyfile_lock(&keyfile_path).unwrap();
         match acquire_keyfile_lock(&keyfile_path) {
             Ok(_) => panic!("expected KeyfileFsBusy"),
-            Err(AppError::KeyfileFsBusy) => {}
+            Err(AppNotice::KeyfileFsBusy) => {}
             Err(e) => panic!("unexpected error: {e:?}"),
         };
     }

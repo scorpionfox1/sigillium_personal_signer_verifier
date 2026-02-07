@@ -2,7 +2,7 @@
 
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
-    command, command_state::lock_session, context::AppCtx, error::AppError, types::AppState,
+    command, command_state::lock_session, context::AppCtx, notices::AppNotice, types::AppState,
 };
 
 use super::Route;
@@ -75,7 +75,7 @@ impl KeyRegistryPanel {
 
                 let has_active_key = current_active_id.is_some();
 
-                let mut active_key_error: Option<AppError> = None;
+                let mut active_key_error: Option<AppNotice> = None;
                 ui.horizontal(|ui| {
                     ui.label("Key:");
                     if let Err(e) = widgets::active_key_selector(
@@ -90,7 +90,7 @@ impl KeyRegistryPanel {
                     }
                 });
                 if let Some(e) = active_key_error {
-                    if let AppError::KeyfileQuarantined { .. } = e {
+                    if let AppNotice::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;
                         return;
                     }
@@ -217,7 +217,7 @@ impl KeyRegistryPanel {
                                         self.enforce_standard_domain = true;
                                     }
                                     Err(e) => {
-                                        if let AppError::KeyfileQuarantined { .. } = e {
+                                        if let AppNotice::KeyfileQuarantined { .. } = e {
                                             *route = Route::KeyfileSelect;
                                             return;
                                         }
@@ -294,7 +294,7 @@ impl KeyRegistryPanel {
                                             self.msg.set_success("Key uninstalled successfully.");
                                         }
                                         Err(e) => {
-                                            if let AppError::KeyfileQuarantined { .. } = e {
+                                            if let AppNotice::KeyfileQuarantined { .. } = e {
                                                 *route = Route::KeyfileSelect;
                                                 return;
                                             }

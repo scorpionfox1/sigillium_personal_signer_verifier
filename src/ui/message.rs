@@ -1,6 +1,6 @@
 // src/ui/message.rs
 
-use sigillium_personal_signer_verifier_lib::error::{AppError, UserMsgKind};
+use sigillium_personal_signer_verifier_lib::notices::{AppNotice, UserMsgKind};
 
 use super::egui;
 use super::egui::{Color32, Ui};
@@ -47,11 +47,11 @@ impl PanelMsgState {
         self.detail = None;
     }
 
-    pub fn from_app_error(&mut self, err: &AppError) {
+    pub fn from_app_error(&mut self, err: &AppNotice) {
         self.detail = Some(err.to_string());
 
         match err {
-            AppError::Msg(s) => {
+            AppNotice::Msg(s) => {
                 self.kind = Some(UserMsgKind::Error);
                 self.short = Some(s.clone());
             }

@@ -3,13 +3,13 @@
 use std::path::Path;
 
 use crate::{
-    error::{AppError, AppResult},
     keyfile::{
         crypto::*,
         fs::write_json,
         types::{AadBytes, EncryptedString, KeyEntry, KeyfileData},
         validate::set_file_mac_in_place,
     },
+    notices::{AppNotice, AppResult},
 };
 
 use base64::{engine::general_purpose, Engine as _};
@@ -81,7 +81,7 @@ fn reencrypt_private_key(
     let nonce = decode_nonce12_b64(&k.key_nonce_b64)?;
     let ct = general_purpose::STANDARD
         .decode(&k.encrypted_private_key_b64)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     let mut pt = decrypt_bytes_with_aad(old_z, aad_priv, &nonce, &ct)?;
 

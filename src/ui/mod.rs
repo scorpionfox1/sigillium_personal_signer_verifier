@@ -34,7 +34,7 @@ use panel_sign::SignPanel;
 use panel_verify::VerifyPanel;
 use sigillium_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
-use sigillium_personal_signer_verifier_lib::error::AppError;
+use sigillium_personal_signer_verifier_lib::notices::AppNotice;
 use sigillium_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
 use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 
@@ -278,7 +278,7 @@ impl eframe::App for UiApp {
 
         if take_best_effort_warn_pending(self.state.as_ref()) {
             self.best_effort_warn
-                .from_app_error(&AppError::PlatformHardeningFailed);
+                .from_app_error(&AppNotice::PlatformHardeningFailed);
         }
 
         let nav_model = self.derive_nav_model(rctx);

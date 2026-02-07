@@ -1,8 +1,8 @@
 // src/keyfile/fs/io.rs
 
 use crate::context::APP_ID;
-use crate::error::{AppError, AppResult};
 use crate::keyfile::types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION};
+use crate::notices::{AppNotice, AppResult};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -16,31 +16,31 @@ use std::os::unix::fs::OpenOptionsExt;
 const KEYFILE_MAX_BYTES: u64 = 1 * 1024 * 1024;
 
 pub(crate) fn read_json(path: &Path) -> AppResult<KeyfileData> {
-    let meta = fs::metadata(path).map_err(|e| AppError::KeyfileFsReadFailed(e.to_string()))?;
+    let meta = fs::metadata(path).map_err(|e| AppNotice::KeyfileFsReadFailed(e.to_string()))?;
 
     let bytes = meta.len();
     if bytes > KEYFILE_MAX_BYTES {
-        return Err(AppError::KeyfileFsTooLarge {
+        return Err(AppNotice::KeyfileFsTooLarge {
             bytes,
             max: KEYFILE_MAX_BYTES,
         });
     }
 
     let text =
-        fs::read_to_string(path).map_err(|e| AppError::KeyfileFsReadFailed(e.to_string()))?;
+        fs::read_to_string(path).map_err(|e| AppNotice::KeyfileFsReadFailed(e.to_string()))?;
 
     let data: KeyfileData =
-        serde_json::from_str(&text).map_err(|e| AppError::KeyfileFsInvalidJson(e.to_string()))?;
+        serde_json::from_str(&text).map_err(|e| AppNotice::KeyfileFsInvalidJson(e.to_string()))?;
 
     if data.version != KEYFILE_VERSION {
-        return Err(AppError::KeyfileFsUnsupportedVersion {
+        return Err(AppNotice::KeyfileFsUnsupportedVersion {
             got: data.version,
             expected: KEYFILE_VERSION,
         });
     }
 
     if data.format != KEYFILE_FORMAT || data.app != APP_ID {
-        return Err(AppError::KeyfileFsMarkerMismatch);
+        return Err(AppNotice::KeyfileFsMarkerMismatch);
     }
 
     Ok(data)
@@ -49,10 +49,10 @@ pub(crate) fn read_json(path: &Path) -> AppResult<KeyfileData> {
 pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
     let parent = path
         .parent()
-        .ok_or_else(|| AppError::KeyfileFsWriteFailed("invalid keyfile path".to_string()))?;
+        .ok_or_else(|| AppNotice::KeyfileFsWriteFailed("invalid keyfile path".to_string()))?;
 
     let json = serde_json::to_vec_pretty(data)
-        .map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
+        .map_err(|e| AppNotice::KeyfileFsWriteFailed(e.to_string()))?;
 
     let mut rnd = [0u8; 12];
     OsRng.fill_bytes(&mut rnd);
@@ -73,22 +73,22 @@ pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
 
     let mut f = opts
         .open(&tmp)
-        .map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
+        .map_err(|e| AppNotice::KeyfileFsWriteFailed(e.to_string()))?;
 
     let write_res: AppResult<()> = (|| {
         f.write_all(&json)
-            .map_err(|e| AppError::KeyfileFsWriteFailed(e.to_string()))?;
+            .map_err(|e| AppNotice::KeyfileFsWriteFailed(e.to_string()))?;
 
         f.flush()
-            .map_err(|e| AppError::KeyfileFsSyncFailed(e.to_string()))?;
+            .map_err(|e| AppNotice::KeyfileFsSyncFailed(e.to_string()))?;
         f.sync_all()
-            .map_err(|e| AppError::KeyfileFsSyncFailed(e.to_string()))?;
+            .map_err(|e| AppNotice::KeyfileFsSyncFailed(e.to_string()))?;
 
         crate::platform::rename_replace(&tmp, path)
-            .map_err(|e| AppError::KeyfileFsRenameFailed(e.to_string()))?;
+            .map_err(|e| AppNotice::KeyfileFsRenameFailed(e.to_string()))?;
 
         if let Some(fail) = crate::platform::fsync_dir_best_effort(parent) {
-            return Err(AppError::KeyfileFsSyncFailed(format!(
+            return Err(AppNotice::KeyfileFsSyncFailed(format!(
                 "directory fsync failed: {}",
                 fail.msg
             )));
@@ -109,15 +109,15 @@ pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
 pub fn backup_keyfile_with_quarantine_prefix(keyfile_path: &Path) -> AppResult<PathBuf> {
     let parent = keyfile_path
         .parent()
-        .ok_or_else(|| AppError::KeyfileFsBackupFailed("invalid keyfile path".to_string()))?;
+        .ok_or_else(|| AppNotice::KeyfileFsBackupFailed("invalid keyfile path".to_string()))?;
 
     if !keyfile_path.exists() {
-        return Err(AppError::KeyfileMissingOrCorrupted);
+        return Err(AppNotice::KeyfileMissingOrCorrupted);
     }
 
     let fname = keyfile_path
         .file_name()
-        .ok_or_else(|| AppError::KeyfileFsBackupFailed("invalid keyfile path".to_string()))?
+        .ok_or_else(|| AppNotice::KeyfileFsBackupFailed("invalid keyfile path".to_string()))?
         .to_string_lossy()
         .to_string();
 
@@ -146,12 +146,12 @@ pub fn backup_keyfile_with_quarantine_prefix(keyfile_path: &Path) -> AppResult<P
                 if candidate_path.exists() {
                     continue;
                 }
-                return Err(AppError::KeyfileFsBackupFailed(e.to_string()));
+                return Err(AppNotice::KeyfileFsBackupFailed(e.to_string()));
             }
         }
     }
 
-    Err(AppError::KeyfileFsBackupExhausted)
+    Err(AppNotice::KeyfileFsBackupExhausted)
 }
 
 // ======================================================
@@ -162,9 +162,9 @@ pub fn backup_keyfile_with_quarantine_prefix(keyfile_path: &Path) -> AppResult<P
 mod tests {
     use super::*;
     use crate::context::APP_ID;
-    use crate::error::AppError;
     use crate::keyfile::types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION};
     use crate::keyfile::KEYFILE_FILENAME;
+    use crate::notices::AppNotice;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -230,7 +230,7 @@ mod tests {
         fs::write(&path, serde_json::to_string_pretty(&data).unwrap()).unwrap();
 
         let err = read_json(&path).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileFsUnsupportedVersion { .. }));
+        assert!(matches!(err, AppNotice::KeyfileFsUnsupportedVersion { .. }));
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
         fs::write(&path, serde_json::to_string_pretty(&data).unwrap()).unwrap();
 
         let err = read_json(&path).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileFsMarkerMismatch));
+        assert!(matches!(err, AppNotice::KeyfileFsMarkerMismatch));
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
         fs::write(&path, message).unwrap();
 
         let err = read_json(&path).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileFsTooLarge { .. }));
+        assert!(matches!(err, AppNotice::KeyfileFsTooLarge { .. }));
     }
 
     #[test]
@@ -353,6 +353,6 @@ mod tests {
         let path = dir.join(KEYFILE_FILENAME);
 
         let err = backup_keyfile_with_quarantine_prefix(&path).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileMissingOrCorrupted));
+        assert!(matches!(err, AppNotice::KeyfileMissingOrCorrupted));
     }
 }

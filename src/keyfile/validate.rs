@@ -1,10 +1,10 @@
 // src/keyfile/validate.rs
 
 use crate::crypto as app_crypto;
-use crate::error::{AppError, AppResult};
 use crate::keyfile::crypto::decode_nonce12_b64;
 use crate::keyfile::fs::read_json;
 use crate::keyfile::types::KeyfileData;
+use crate::notices::{AppNotice, AppResult};
 use crate::types::KeyId;
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{Hmac, Mac};
@@ -27,25 +27,25 @@ pub fn verify_keyfile_mac_on_disk(path: &Path, master_key: &[u8; 32]) -> AppResu
     let mac_b64 = data
         .file_mac_b64
         .as_deref()
-        .ok_or(AppError::KeyfileMacMissing)?;
+        .ok_or(AppNotice::KeyfileMacMissing)?;
 
     verify_file_mac(&data, master_key, mac_b64)
 }
 
 pub(crate) fn validate_keyfile_structure(data: &KeyfileData) -> AppResult<()> {
     // salt must decode to 16 bytes
-    decode_b64_exact_len(&data.salt, 16, AppError::KeyfileStructCorrupted)?;
+    decode_b64_exact_len(&data.salt, 16, AppNotice::KeyfileStructCorrupted)?;
 
     // if present, mac must decode to 32 bytes
     if let Some(mac_b64) = &data.file_mac_b64 {
-        decode_b64_exact_len(mac_b64, 32, AppError::KeyfileMacInvalid)?;
+        decode_b64_exact_len(mac_b64, 32, AppNotice::KeyfileMacInvalid)?;
     }
 
     // key ids must be unique; key material fields must decode with expected lengths.
     let mut seen_ids: HashSet<KeyId> = HashSet::new();
     for k in data.keys.iter() {
         if !seen_ids.insert(k.id) {
-            return Err(AppError::KeyfileStructCorrupted);
+            return Err(AppNotice::KeyfileStructCorrupted);
         }
 
         app_crypto::decode_public_key_hex(&k.public_key_hex)?;
@@ -82,13 +82,13 @@ pub(crate) fn verify_file_mac(
     master_key: &[u8; 32],
     expected_b64: &str,
 ) -> AppResult<()> {
-    let expected_vec = decode_b64_exact_len(expected_b64, 32, AppError::KeyfileMacInvalid)?;
+    let expected_vec = decode_b64_exact_len(expected_b64, 32, AppNotice::KeyfileMacInvalid)?;
     let expected = to_arr32(&expected_vec);
 
     let actual = compute_file_mac_bytes(data, master_key)?;
 
     if expected.ct_eq(&actual).unwrap_u8() == 0 {
-        return Err(AppError::KeyfileMacInvalid);
+        return Err(AppNotice::KeyfileMacInvalid);
     }
 
     Ok(())
@@ -97,10 +97,10 @@ pub(crate) fn verify_file_mac(
 fn decode_b64(value: &str) -> AppResult<Vec<u8>> {
     general_purpose::STANDARD
         .decode(value)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))
+        .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))
 }
 
-fn decode_b64_exact_len(value: &str, len: usize, err: AppError) -> AppResult<Vec<u8>> {
+fn decode_b64_exact_len(value: &str, len: usize, err: AppNotice) -> AppResult<Vec<u8>> {
     let decoded = decode_b64(value)?;
     if decoded.len() != len {
         return Err(err);
@@ -135,11 +135,11 @@ fn compute_file_mac_bytes(data: &KeyfileData, master_key: &[u8; 32]) -> AppResul
         keys: data.keys.clone(),
     };
 
-    let canon = serde_json::to_vec(&tmp).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+    let canon = serde_json::to_vec(&tmp).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
 
     let mac_key = mac_key_from_master(master_key);
     let mut mac =
-        <HmacSha256 as Mac>::new_from_slice(&mac_key).map_err(|_| AppError::CryptoInitFailed)?;
+        <HmacSha256 as Mac>::new_from_slice(&mac_key).map_err(|_| AppNotice::CryptoInitFailed)?;
     mac.update(&canon);
     let out = mac.finalize().into_bytes();
 

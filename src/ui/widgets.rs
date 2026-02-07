@@ -5,7 +5,7 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
-    error::AppError,
+    notices::AppNotice,
     types::{AppState, KeyId, KeyMeta},
 };
 
@@ -32,11 +32,19 @@ pub fn large_button(label: &str) -> egui::Button<'_> {
 }
 
 pub fn section_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(egui::RichText::new(label).strong().size(SECTION_HEADER_TEXT_SIZE));
+    ui.label(
+        egui::RichText::new(label)
+            .strong()
+            .size(SECTION_HEADER_TEXT_SIZE),
+    );
 }
 
 pub fn screen_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(egui::RichText::new(label).strong().size(SCREEN_HEADER_TEXT_SIZE));
+    ui.label(
+        egui::RichText::new(label)
+            .strong()
+            .size(SCREEN_HEADER_TEXT_SIZE),
+    );
 }
 
 pub fn panel_title(ui: &mut egui::Ui, label: &str) {
@@ -75,7 +83,7 @@ pub fn active_key_selector(
     route: &mut super::Route,
     id_salt: &'static str,
     metas: &[KeyMeta],
-) -> Result<Option<KeyId>, AppError> {
+) -> Result<Option<KeyId>, AppNotice> {
     let current_active_id: Option<KeyId> = lock_session(state).ok().and_then(|g| g.active_key_id);
 
     let mut choice: Option<KeyId> = current_active_id;
@@ -115,7 +123,7 @@ pub fn active_key_selector(
                 // If select failed due to quarantine/missing, clear active key and route to KeyfileSelect.
                 if matches!(
                     res,
-                    Err(AppError::KeyfileQuarantined { .. } | AppError::KeyfileMissing { .. })
+                    Err(AppNotice::KeyfileQuarantined { .. } | AppNotice::KeyfileMissing { .. })
                 ) {
                     let _ = command::clear_active_key(state);
                     *route = super::Route::KeyfileSelect;

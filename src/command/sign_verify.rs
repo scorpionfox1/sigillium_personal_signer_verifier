@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     crypto,
-    error::{AppError, AppResult},
+    notices::{AppNotice, AppResult},
     types::{AppState, SignOutputMode, SignVerifyMode, TAG_ASSOC_KEY_ID, TAG_SIGNED_UTC},
 };
 use base64::engine::general_purpose::STANDARD;
@@ -27,7 +27,7 @@ pub fn sign_message(
     config_json: Option<&str>,
 ) -> AppResult<String> {
     if msg.is_empty() {
-        return Err(AppError::EmptyMessage);
+        return Err(AppNotice::EmptyMessage);
     }
 
     // bytes we will sign
@@ -40,10 +40,10 @@ pub fn sign_message(
 
             SignVerifyMode::Json => {
                 let s = std::str::from_utf8(&msg_bytes)
-                    .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
+                    .map_err(|_| AppNotice::InvalidUtf8("invalid utf-8".into()))?;
 
                 let instance: Value =
-                    serde_json::from_str(s).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+                    serde_json::from_str(s).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
 
                 let digest = match schema_json {
                     Some(schema) => json_ops::canonicalize_json_2020_12(s, schema)?,
@@ -57,7 +57,7 @@ pub fn sign_message(
     let sig = crate::command_state::with_active_private(state, |privk| {
         Ok(crypto::sign_message(&*privk, &to_sign))
     })
-    .map_err(AppError::Msg)?;
+    .map_err(AppNotice::Msg)?;
 
     let sig_base64 = STANDARD.encode(&sig);
 
@@ -69,7 +69,7 @@ pub fn sign_message(
     // Record mode
     let config: Value = match config_json {
         Some(config_str) => serde_json::from_str(config_str)
-            .map_err(|_| AppError::InvalidJson("Invalid config JSON".into()))?,
+            .map_err(|_| AppNotice::InvalidJson("Invalid config JSON".into()))?,
         None => Value::Object(serde_json::Map::new()),
     };
 
@@ -80,7 +80,7 @@ pub fn sign_message(
     };
 
     let Some(active_key_id) = active_key_id else {
-        return Err(AppError::NoActiveKeySelected);
+        return Err(AppNotice::NoActiveKeySelected);
     };
 
     // look up pub key for active key id
@@ -89,7 +89,7 @@ pub fn sign_message(
         let key = keys
             .iter()
             .find(|k| k.id == active_key_id)
-            .ok_or_else(|| AppError::MissingField("Public key not found".into()))?;
+            .ok_or_else(|| AppNotice::MissingField("Public key not found".into()))?;
         hex::encode(key.public_key)
     };
 
@@ -116,7 +116,7 @@ pub fn verify_message(
     schema_json: Option<&str>,
 ) -> AppResult<bool> {
     if msg.is_empty() {
-        return Err(AppError::EmptyMessage);
+        return Err(AppNotice::EmptyMessage);
     }
 
     // --- message preparation ---
@@ -126,7 +126,7 @@ pub fn verify_message(
         SignVerifyMode::Text => msg.clone(),
         SignVerifyMode::Json => {
             let s = std::str::from_utf8(&msg)
-                .map_err(|_| AppError::InvalidUtf8("invalid utf-8".into()))?;
+                .map_err(|_| AppNotice::InvalidUtf8("invalid utf-8".into()))?;
 
             let digest = match schema_json {
                 Some(schema) => json_ops::canonicalize_json_2020_12(s, schema)?,
@@ -143,15 +143,15 @@ pub fn verify_message(
     // --- decode signature: base64 -> [u8; 64] ---
     let sig_bytes = STANDARD
         .decode(signature_b64.trim())
-        .map_err(|_| AppError::InvalidSignatureBase64)?;
+        .map_err(|_| AppNotice::InvalidSignatureBase64)?;
 
     if sig_bytes.len() != 64 {
-        return Err(AppError::InvalidSignatureLength);
+        return Err(AppNotice::InvalidSignatureLength);
     }
 
     let sig: [u8; 64] = sig_bytes
         .try_into()
-        .map_err(|_| AppError::InvalidSignatureLength)?;
+        .map_err(|_| AppNotice::InvalidSignatureLength)?;
 
     // --- verify ---
     crypto::verify_message(&pk, &to_verify, &sig)
@@ -298,13 +298,13 @@ mod tests {
     fn sign_message_rejects_empty_message() {
         let state = mk_state_with_active_private([1u8; 32]);
         let err = sign_message("", SignVerifyMode::Text, None, &state, None).unwrap_err();
-        assert!(matches!(err, AppError::EmptyMessage));
+        assert!(matches!(err, AppNotice::EmptyMessage));
     }
 
     #[test]
     fn verify_message_rejects_empty_message() {
         let err = verify_message("00", "", "AA==", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::EmptyMessage));
+        assert!(matches!(err, AppNotice::EmptyMessage));
     }
 
     #[test]
@@ -328,8 +328,8 @@ mod tests {
 
         let err = sign_message("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
         match err {
-            AppError::Msg(s) => assert_eq!(s, AppError::AppLocked.to_string()),
-            other => panic!("expected AppError::Msg(AppLocked), got {other:?}"),
+            AppNotice::Msg(s) => assert_eq!(s, AppNotice::AppLocked.to_string()),
+            other => panic!("expected AppNotice::Msg(AppLocked), got {other:?}"),
         }
 
         // Unlocked but no active private => NoActiveKeySelected
@@ -348,8 +348,8 @@ mod tests {
 
         let err = sign_message("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
         match err {
-            AppError::Msg(s) => assert_eq!(s, AppError::NoActiveKeySelected.to_string()),
-            other => panic!("expected AppError::Msg(NoActiveKeySelected), got {other:?}"),
+            AppNotice::Msg(s) => assert_eq!(s, AppNotice::NoActiveKeySelected.to_string()),
+            other => panic!("expected AppNotice::Msg(NoActiveKeySelected), got {other:?}"),
         }
     }
 
@@ -437,11 +437,11 @@ mod tests {
     #[test]
     fn verify_rejects_invalid_public_key_hex_and_lengths() {
         let err = verify_message("zz", "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::InvalidPublicKeyHex));
+        assert!(matches!(err, AppNotice::InvalidPublicKeyHex));
 
         let pk31 = hex::encode([0u8; 31]);
         let err = verify_message(&pk31, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::InvalidPublicKeyLength));
+        assert!(matches!(err, AppNotice::InvalidPublicKeyLength));
     }
 
     #[test]
@@ -449,10 +449,10 @@ mod tests {
         let pk = hex::encode([0u8; 32]);
 
         let err = verify_message(&pk, "hi", "!!!!", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::InvalidSignatureBase64));
+        assert!(matches!(err, AppNotice::InvalidSignatureBase64));
 
         let err = verify_message(&pk, "hi", "AA==", SignVerifyMode::Text, None).unwrap_err();
-        assert!(matches!(err, AppError::InvalidSignatureLength));
+        assert!(matches!(err, AppNotice::InvalidSignatureLength));
     }
 
     #[test]

@@ -1,9 +1,9 @@
 // src/command/keyfile_mutation.rs
 
 use crate::context::AppCtx;
-use crate::error::{AppError, AppResult};
 use crate::fs_hardening::enforce_keyfile_perms_best_effort;
 use crate::keyfile::fs::lock::acquire_keyfile_lock;
+use crate::notices::{AppNotice, AppResult};
 use crate::types::{AppState, KeyId};
 use crate::{command_state::*, crypto, keyfile};
 use std::thread;
@@ -25,12 +25,12 @@ pub fn install_key(
 ) -> AppResult<()> {
     let mnemonic = mnemonic.trim();
     if mnemonic.is_empty() {
-        return Err(AppError::EmptyMnemonic);
+        return Err(AppNotice::EmptyMnemonic);
     }
 
     let label = label.trim();
     if label.is_empty() {
-        return Err(AppError::EmptyLabel);
+        return Err(AppNotice::EmptyLabel);
     }
 
     let domain_for_derivation: String = if enforce_standard_domain {
@@ -38,7 +38,7 @@ pub fn install_key(
         if d.is_empty() {
             String::new()
         } else {
-            validate_standard_domain_ascii(d).map_err(|_| AppError::InvalidStandardDomain)?
+            validate_standard_domain_ascii(d).map_err(|_| AppNotice::InvalidStandardDomain)?
         }
     } else {
         // Unrestricted mode: use EXACTLY as provided (no trim, no lowercase, no validation).
@@ -47,7 +47,7 @@ pub fn install_key(
 
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     // Command-layer normalization: None/blank => ""
     let associated_norm: String = associated_key_id.unwrap_or("").trim().to_string();
@@ -90,7 +90,7 @@ pub fn uninstall_active_key(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
     let active_id: KeyId = match lock_session(state) {
         Ok(g) => match g.active_key_id {
             Some(id) => id,
-            None => return Err(AppError::Msg("No active key selected".into())),
+            None => return Err(AppNotice::Msg("No active key selected".into())),
         },
         Err(e) => return Err(e),
     };
@@ -100,7 +100,7 @@ pub fn uninstall_active_key(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
 
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     (|| {
         enforce_keyfile_perms_best_effort(
@@ -143,7 +143,7 @@ pub fn change_passphrase(
 
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     (|| {
         enforce_keyfile_perms_best_effort(
@@ -195,7 +195,7 @@ pub fn change_passphrase(
 
 fn validate_standard_domain_ascii(raw: &str) -> AppResult<String> {
     if !raw.is_ascii() {
-        return Err(AppError::InvalidStandardDomain);
+        return Err(AppNotice::InvalidStandardDomain);
     }
 
     let s = raw.to_ascii_lowercase();
@@ -203,7 +203,7 @@ fn validate_standard_domain_ascii(raw: &str) -> AppResult<String> {
         let ok =
             ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '.' | '-' | '_' | '/');
         if !ok {
-            return Err(AppError::InvalidStandardDomain);
+            return Err(AppNotice::InvalidStandardDomain);
         }
     }
 
@@ -289,7 +289,7 @@ mod tests {
 
         let err = install_key("", "example.com", "label", None, true, &state, &ctx).unwrap_err();
 
-        assert!(matches!(err, AppError::EmptyMnemonic));
+        assert!(matches!(err, AppNotice::EmptyMnemonic));
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(matches!(err, AppError::EmptyLabel));
+        assert!(matches!(err, AppNotice::EmptyLabel));
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(matches!(err, AppError::InvalidStandardDomain));
+        assert!(matches!(err, AppNotice::InvalidStandardDomain));
     }
 
     // --------------------------------------------------
@@ -343,7 +343,7 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = uninstall_active_key(&state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        assert!(matches!(err, AppNotice::Msg(_)));
     }
 
     // --------------------------------------------------
@@ -357,7 +357,7 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = change_passphrase("", "newpassphrase", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::PassphraseRequired));
+        assert!(matches!(err, AppNotice::PassphraseRequired));
     }
 
     #[test]
@@ -367,6 +367,6 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = change_passphrase("oldpassphrase", "", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::PassphraseRequired));
+        assert!(matches!(err, AppNotice::PassphraseRequired));
     }
 }

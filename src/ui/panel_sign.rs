@@ -5,7 +5,7 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
-    error::AppError,
+    notices::AppNotice,
     types::{AppState, SignOutputMode, SignVerifyMode},
 };
 
@@ -64,7 +64,7 @@ impl SignPanel {
 
         // Active key selector outside scroll area
         let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-        let mut active_key_error: Option<AppError> = None;
+        let mut active_key_error: Option<AppNotice> = None;
         ui.horizontal(|ui| {
             ui.label("Key:");
             if let Err(e) =
@@ -74,7 +74,7 @@ impl SignPanel {
             }
         });
         if let Some(e) = active_key_error {
-            if let AppError::KeyfileQuarantined { .. } = e {
+            if let AppNotice::KeyfileQuarantined { .. } = e {
                 *route = Route::KeyfileSelect;
                 return;
             }
@@ -277,7 +277,7 @@ r#"{
                                 self.msg.set_success("Signed.");
                             }
                             Err(e) => {
-                                if let AppError::KeyfileQuarantined { .. } = e {
+                                if let AppNotice::KeyfileQuarantined { .. } = e {
                                     *route = Route::KeyfileSelect;
                                     self.output_text.clear();
                                     return;
@@ -361,12 +361,11 @@ r#"{
                             if output_mode == SignOutputMode::Signature {
                                 ui.ctx().copy_text(self.output_text.clone());
                             }
-                            let msg = if output_mode == SignOutputMode::Record {
-                                "Copied output JSON to clipboard."
-                            } else {
-                                "Copied output to clipboard."
-                            };
-                            self.msg.set_success(msg);
+
+                            let err = AppNotice::StringCopied;
+
+                            let um = err.user_msg();
+                            self.msg.set_success(um.short);
                         }
                     });
 

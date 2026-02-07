@@ -4,7 +4,6 @@ use std::path::Path;
 
 use crate::{
     crypto as app_crypto,
-    error::{AppError, AppResult},
     keyfile::{
         crypto::{
             aad_for_associated_key_id, aad_for_private_key, decode_nonce12_b64,
@@ -14,6 +13,7 @@ use crate::{
         validate::{validate_keyfile_structure, verify_file_mac},
         KeyEntry, KeyfileData,
     },
+    notices::{AppNotice, AppResult},
     types::{KeyId, KeyMeta},
 };
 
@@ -60,7 +60,7 @@ pub fn decrypt_key_material(
         .keys
         .iter()
         .find(|k| k.id == key_id)
-        .ok_or(AppError::KeyfileKeyIdNotFound)?;
+        .ok_or(AppNotice::KeyfileKeyIdNotFound)?;
 
     let master_key_z = Zeroizing::new(*master_key);
 
@@ -85,7 +85,7 @@ fn decrypt_private_key_field(
     let nonce = decode_nonce12_b64(&entry.key_nonce_b64)?;
     let ct = general_purpose::STANDARD
         .decode(&entry.encrypted_private_key_b64)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     let mut pt = decrypt_bytes_with_aad(
         master_key,
@@ -96,7 +96,7 @@ fn decrypt_private_key_field(
 
     if pt.len() != 32 {
         pt.zeroize();
-        return Err(AppError::KeyfileCorrupt);
+        return Err(AppNotice::KeyfileCorrupt);
     }
 
     let mut out = [0u8; 32];
@@ -107,7 +107,7 @@ fn decrypt_private_key_field(
 
 pub fn inspect_keyfile(path: &Path) -> AppResult<()> {
     if !path.exists() {
-        return Err(AppError::KeyfileMissing);
+        return Err(AppNotice::KeyfileMissing);
     }
 
     let data = read_json(path)?;

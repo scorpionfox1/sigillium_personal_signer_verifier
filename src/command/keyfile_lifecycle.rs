@@ -1,9 +1,9 @@
 // src/command/keyfile_lifecycle.rs
 
 use crate::context::AppCtx;
-use crate::error::{AppError, AppResult};
 use crate::fs_hardening::enforce_keyfile_perms_best_effort;
 use crate::keyfile::fs::backup_keyfile_with_quarantine_prefix;
+use crate::notices::{AppNotice, AppResult};
 use crate::types::AppState;
 use crate::{command_state::*, keyfile};
 use zeroize::Zeroizing;
@@ -14,7 +14,7 @@ pub fn create_keyfile(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppRe
 
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     let result: AppResult<()> = (|| {
         keyfile::write_blank_keyfile(&keyfile_path)?;
@@ -33,7 +33,7 @@ pub fn create_keyfile(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppRe
         keyfile::fs::write_json(&keyfile_path, &data)?;
         // END NEW
 
-        lock_app_inner_if_unlocked(state, "create_keyfile").map_err(AppError::Msg)?;
+        lock_app_inner_if_unlocked(state, "create_keyfile").map_err(AppNotice::Msg)?;
 
         Ok(())
     })();
@@ -44,11 +44,11 @@ pub fn create_keyfile(passphrase: &str, state: &AppState, ctx: &AppCtx) -> AppRe
 pub fn quarantine_keyfile_now(state: &AppState, ctx: &AppCtx) -> AppResult<()> {
     let keyfile_path = ctx
         .current_keyfile_path()
-        .ok_or_else(|| AppError::Msg("No keyfile selected".into()))?;
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
 
     backup_keyfile_with_quarantine_prefix(&keyfile_path)?;
     ctx.set_selected_keyfile_dir(None);
-    lock_app_inner_if_unlocked(state, "keyfile integrity failure").map_err(AppError::Msg)?;
+    lock_app_inner_if_unlocked(state, "keyfile integrity failure").map_err(AppNotice::Msg)?;
     Ok(())
 }
 
@@ -97,7 +97,7 @@ mod tests {
         ctx.set_selected_keyfile_dir(None);
 
         let err = create_keyfile("correct horse battery staple", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(ref s) if s == "No keyfile selected"));
+        assert!(matches!(err, AppNotice::Msg(ref s) if s == "No keyfile selected"));
     }
 
     #[test]
@@ -107,7 +107,7 @@ mod tests {
         let (ctx, _dir) = mk_ctx_with_selected_dir(td.path());
 
         let err = create_keyfile("", &state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::PassphraseRequired));
+        assert!(matches!(err, AppNotice::PassphraseRequired));
     }
 
     #[test]
@@ -137,7 +137,7 @@ mod tests {
         let ctx = AppCtx::new(td.path().to_path_buf());
 
         let err = quarantine_keyfile_now(&state, &ctx).unwrap_err();
-        assert!(matches!(err, AppError::Msg(_)));
+        assert!(matches!(err, AppNotice::Msg(_)));
     }
 
     #[test]

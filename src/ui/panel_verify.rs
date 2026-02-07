@@ -8,7 +8,7 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
-    error::AppError,
+    notices::AppNotice,
     types::{AppState, KeyId, SignVerifyMode},
 };
 
@@ -55,7 +55,7 @@ impl VerifyPanel {
                 ui.separator();
 
                 let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-                let mut active_key_error: Option<AppError> = None;
+                let mut active_key_error: Option<AppNotice> = None;
                 ui.horizontal(|ui| {
                     ui.label("Key:");
                     if let Err(e) = widgets::active_key_selector(
@@ -70,7 +70,7 @@ impl VerifyPanel {
                     }
                 });
                 if let Some(e) = active_key_error {
-                    if let AppError::KeyfileQuarantined { .. } = e {
+                    if let AppNotice::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;
                         return;
                     }
@@ -174,7 +174,10 @@ impl VerifyPanel {
                 ui.horizontal(|ui| {
                     let can_verify = current_active_id.is_some();
                     if ui
-                        .add_enabled(can_verify, egui::Button::new(egui::RichText::new("Verify").strong()))
+                        .add_enabled(
+                            can_verify,
+                            egui::Button::new(egui::RichText::new("Verify").strong()),
+                        )
                         .clicked()
                     {
                         self.clear_messages();
@@ -242,7 +245,7 @@ impl VerifyPanel {
                             Ok(true) => self.msg.set_info("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),
                             Err(e) => {
-                                if let AppError::KeyfileQuarantined { .. } = e {
+                                if let AppNotice::KeyfileQuarantined { .. } = e {
                                     *route = Route::KeyfileSelect;
                                     return;
                                 }
