@@ -545,39 +545,44 @@ impl DocumentWizardPanel {
                     widgets::section_header(ui, "Document hashes & raw text");
                     ui.add_space(6.0);
 
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false; 2])
-                        .show(ui, |ui| {
-                            for (i, d) in wiz.docs.iter().enumerate() {
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.label("•");
-                                    ui.label(format!("Computed hash: {}", d.computed_hash_hex));
-                                    ui.label("for doc");
+                    ui.vertical(|ui| {
+                        for (i, d) in wiz.docs.iter().enumerate() {
+                            let header_label = format!("• {}", d.doc_identity.label);
+                            egui::CollapsingHeader::new(header_label)
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.label(format!(
+                                            "Computed hash: {}",
+                                            d.computed_hash_hex
+                                        ));
+                                        ui.label("for");
 
-                                    let link = ui.link(&d.doc_identity.label);
-                                    if link.clicked() {
-                                        let filename =
-                                            default_raw_text_filename(i, &d.doc_identity.label);
-                                        let canonical_text = doc_raw_text(d);
-                                        if let Some(path) = rfd::FileDialog::new()
-                                            .set_file_name(&filename)
-                                            .save_file()
-                                        {
-                                            match std::fs::write(&path, canonical_text) {
-                                                Ok(()) => msg.set_success(&format!(
-                                                    "Saved raw document text to {}",
-                                                    path.display()
-                                                )),
-                                                Err(e) => msg.set_warn(&format!(
-                                                    "Failed to save raw document text: {e}"
-                                                )),
+                                        let link = ui.link("raw text");
+                                        if link.clicked() {
+                                            let filename =
+                                                default_raw_text_filename(i, &d.doc_identity.label);
+                                            let canonical_text = doc_raw_text(d);
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .set_file_name(&filename)
+                                                .save_file()
+                                            {
+                                                match std::fs::write(&path, canonical_text) {
+                                                    Ok(()) => msg.set_success(&format!(
+                                                        "Saved raw document text to {}",
+                                                        path.display()
+                                                    )),
+                                                    Err(e) => msg.set_warn(&format!(
+                                                        "Failed to save raw document text: {e}"
+                                                    )),
+                                                }
                                             }
                                         }
-                                    }
+                                    });
                                 });
-                                ui.add_space(4.0);
-                            }
-                        });
+                            ui.add_space(4.0);
+                        }
+                    });
                 },
             );
         });
