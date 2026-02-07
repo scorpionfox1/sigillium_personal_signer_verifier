@@ -8,6 +8,7 @@ use sigillium_personal_signer_verifier_lib::context::AppCtx;
 use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{Route, RoutePrefill};
 
@@ -16,6 +17,7 @@ use sigillium_personal_signer_verifier_lib::command::document_wizard::{
     step_back, step_next, validate_current_section_inputs, WizardStepPhase,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
+use sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WizardPanelMode {
@@ -309,6 +311,8 @@ impl DocumentWizardPanel {
             }
         }
 
+        let mut markdown_preview: Option<MarkdownPreview> = None;
+
         // Centerpiece: section text / translation / inputs.
         match *phase {
             WizardStepPhase::About => {
@@ -316,6 +320,11 @@ impl DocumentWizardPanel {
                     *phase = WizardStepPhase::Text;
                     return;
                 };
+
+                markdown_preview = Some(MarkdownPreview {
+                    title: "About this Document".to_string(),
+                    body: about.to_string(),
+                });
 
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
@@ -335,6 +344,10 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
+                markdown_preview = Some(MarkdownPreview {
+                    title: format!("{} (section)", doc_label),
+                    body: section.text.clone(),
+                });
                 ui_section_text(ui, &doc_label, section);
             }
             WizardStepPhase::Translation => {
@@ -342,6 +355,12 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
+                if let Some(translation) = section.translation.as_ref() {
+                    markdown_preview = Some(MarkdownPreview {
+                        title: format!("{} (translation)", doc_label),
+                        body: translation.text.clone(),
+                    });
+                }
                 ui_section_translation(ui, &doc_label, section);
             }
             WizardStepPhase::Inputs => {
@@ -373,6 +392,17 @@ impl DocumentWizardPanel {
                         msg.set_warn(&format!("{e}"));
                     } else {
                         msg.clear();
+                    }
+                }
+
+                let preview_btn = widgets::large_button("View in Browser")
+                    .min_size(egui::vec2(150.0, button_height));
+                if ui
+                    .add_enabled(markdown_preview.is_some(), preview_btn)
+                    .clicked()
+                {
+                    if let Some(preview) = markdown_preview.as_ref() {
+                        open_markdown_preview(preview, msg);
                     }
                 }
 
@@ -481,8 +511,8 @@ impl DocumentWizardPanel {
         let avail = ui.available_width().max(1.0);
 
         // Keep the hash column readable even on narrow windows.
-        let right_w = (avail * 0.34).clamp(260.0, 420.0);
-        let left_w = (avail - gap - right_w).max(260.0);
+        let right_w = (avail * 0.42).clamp(280.0, 520.0);
+        let left_w = (avail - gap - right_w).max(280.0);
 
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
             ui.allocate_ui_with_layout(
@@ -520,27 +550,39 @@ impl DocumentWizardPanel {
                 egui::vec2(right_w, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    widgets::section_header(ui, "Individual document hashes");
+                    widgets::section_header(ui, "Document hashes & raw text");
                     ui.add_space(6.0);
 
                     egui::ScrollArea::vertical()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             for (i, d) in wiz.docs.iter().enumerate() {
-                                let title = format!(
-                                    "Doc {}/{} — {}",
-                                    i + 1,
-                                    wiz.docs.len(),
-                                    d.doc_identity.label
-                                );
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label("•");
+                                    ui.label(format!("Computed hash: {}", d.computed_hash_hex));
+                                    ui.label("for doc");
 
-                                egui::CollapsingHeader::new(title).default_open(false).show(
-                                    ui,
-                                    |ui| {
-                                        ui.label(format!("Computed hash: {}", d.computed_hash_hex));
-                                    },
-                                );
-
+                                    let link = ui.link(&d.doc_identity.label);
+                                    if link.clicked() {
+                                        let filename =
+                                            default_raw_text_filename(i, &d.doc_identity.label);
+                                        let canonical_text = doc_raw_text(d);
+                                        if let Some(path) = rfd::FileDialog::new()
+                                            .set_file_name(&filename)
+                                            .save_file()
+                                        {
+                                            match std::fs::write(&path, canonical_text) {
+                                                Ok(()) => msg.set_success(&format!(
+                                                    "Saved raw document text to {}",
+                                                    path.display()
+                                                )),
+                                                Err(e) => msg.set_warn(&format!(
+                                                    "Failed to save raw document text: {e}"
+                                                )),
+                                            }
+                                        }
+                                    }
+                                });
                                 ui.add_space(4.0);
                             }
                         });
@@ -597,6 +639,112 @@ fn ui_doc_screen_skeleton(
                 body(ui);
             });
     });
+}
+
+fn doc_raw_text(doc: &dw::DocRunState) -> String {
+    canonical_doc_text_from_sections(doc.sections.iter().map(|section| section.text.as_str()))
+}
+
+fn default_raw_text_filename(index: usize, label: &str) -> String {
+    let mut slug = String::with_capacity(label.len());
+    for ch in label.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+        } else if ch.is_ascii_whitespace() || ch == '-' || ch == '_' {
+            slug.push('_');
+        }
+    }
+
+    let slug = slug.trim_matches('_');
+    if slug.is_empty() {
+        format!("raw-document-text-{}.txt", index + 1)
+    } else {
+        format!("raw-document-text-{}-{}.txt", index + 1, slug)
+    }
+}
+
+struct MarkdownPreview {
+    title: String,
+    body: String,
+}
+
+fn open_markdown_preview(preview: &MarkdownPreview, msg: &mut PanelMsgState) {
+    let html = markdown_preview_to_html(preview);
+    let filename = temp_markdown_filename();
+    let path = std::env::temp_dir().join(filename);
+
+    if let Err(e) = std::fs::write(&path, html) {
+        msg.set_warn(&format!("Failed to write preview HTML: {e}"));
+        return;
+    }
+
+    let Some(path_str) = path.to_str() else {
+        msg.set_warn("Failed to open preview: temp path is not valid UTF-8.");
+        return;
+    };
+
+    if let Err(e) = webbrowser::open(path_str) {
+        msg.set_warn(&format!("Failed to open preview in browser: {e}"));
+        return;
+    }
+
+    msg.set_success(&format!("Opened preview in browser: {}", path.display()));
+}
+
+fn markdown_preview_to_html(preview: &MarkdownPreview) -> String {
+    use pulldown_cmark::{html, Options, Parser};
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
+
+    let parser = Parser::new_ext(&preview.body, options);
+    let mut body_html = String::new();
+    html::push_html(&mut body_html, parser);
+
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{}</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; line-height: 1.5; }}
+    pre, code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    pre {{ padding: 12px; background: #f4f4f4; overflow-x: auto; }}
+    table {{ border-collapse: collapse; }}
+    th, td {{ border: 1px solid #ccc; padding: 6px 10px; }}
+  </style>
+</head>
+<body>
+  <h1>{}</h1>
+  {}
+</body>
+</html>
+"#,
+        escape_html(&preview.title),
+        escape_html(&preview.title),
+        body_html
+    )
+}
+
+fn temp_markdown_filename() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("sigillium-docwizard-preview-{}.html", nanos)
+}
+
+fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn ui_doc_screen_skeleton_notice_above_header(
