@@ -15,6 +15,7 @@ A template file is a JSON5 object:
 {
   template_id: "optional-string",
   template_desc: "optional-string",
+  bundle_about: "optional string",
   docs: [ /* 1+ documents */ ]
 }
 ```
@@ -22,9 +23,12 @@ A template file is a JSON5 object:
 ### Fields
 - `template_id` (optional, string)
 - `template_desc` (optional, string)
+- `bundle_about` (optional, string, UI-only; not part of signed material)
 - `docs` (**required**, array, must contain at least 1 document)
 
 Template load fails if `docs` is empty.
+
+`bundle_about` is an optional UI-only introduction shown before the first document. It is not part of the signed material and does not affect hashing.
 
 ---
 
@@ -36,6 +40,7 @@ Each entry of `docs[]`:
 {
   doc_identity: { id: "…", label: "…", ver: "…" },
   doc_hash: { algo: "sha256", hash: "…hex…" },
+  doc_about: "optional string",
   sections: [ /* 1+ sections */ ]
 }
 ```
@@ -63,6 +68,10 @@ doc_hash: {
 
 - `algo` (required): currently only `"sha256"` is supported.
 - `hash` (required): hex string. Case-insensitive compare is used for expected vs computed.
+
+### 2.3 doc_about (optional)
+
+`doc_about` is an optional UI-only introduction shown before the document sections. It is not part of the signed material and does not affect hashing.
 
 ---
 

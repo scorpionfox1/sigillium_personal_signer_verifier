@@ -12,8 +12,9 @@ use std::path::PathBuf;
 use super::{Route, RoutePrefill};
 
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
-    self as dw, all_docs_have_no_template_errors, current_doc_about, doc_has_about, is_last_step,
-    step_back, step_next, validate_current_section_inputs, WizardStepPhase,
+    self as dw, all_docs_have_no_template_errors, bundle_has_about, current_bundle_about,
+    current_doc_about, doc_has_about, is_last_step, step_back, step_next,
+    validate_current_section_inputs, WizardStepPhase,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
 use sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections;
@@ -105,18 +106,25 @@ impl DocumentWizardPanel {
                         .map(|d| d.sections.len())
                         .unwrap_or(0);
 
-                    let section_num = match self.phase {
-                        WizardStepPhase::About => 0,
-                        _ => self.section_index.saturating_add(1),
+                    let label = if matches!(self.mode, WizardPanelMode::ReviewBuild)
+                        || matches!(self.phase, WizardStepPhase::BundleAbout)
+                    {
+                        format!("Doc 0 of {}", doc_count.max(1))
+                    } else {
+                        let section_num = match self.phase {
+                            WizardStepPhase::About => 0,
+                            _ => self.section_index.saturating_add(1),
+                        };
+                        format!(
+                            "Doc {} of {} — Section {} of {}",
+                            doc_index.saturating_add(1),
+                            doc_count.max(1),
+                            section_num,
+                            section_count,
+                        )
                     };
 
-                    ui.label(format!(
-                        "Doc {} of {} — Section {} of {}",
-                        doc_index.saturating_add(1),
-                        doc_count.max(1),
-                        section_num,
-                        section_count,
-                    ));
+                    ui.label(label);
                     ui.add_space(6.0);
                 }
 
@@ -213,7 +221,9 @@ impl DocumentWizardPanel {
                                     self.wizard = Some(w);
                                     self.msg.clear();
                                     if let Some(wiz) = self.wizard.as_ref() {
-                                        self.phase = if doc_has_about(wiz) {
+                                        self.phase = if bundle_has_about(wiz) {
+                                            WizardStepPhase::BundleAbout
+                                        } else if doc_has_about(wiz) {
                                             WizardStepPhase::About
                                         } else {
                                             WizardStepPhase::Text
@@ -260,7 +270,7 @@ impl DocumentWizardPanel {
             .map(|d| d.sections.len())
             .unwrap_or(0);
 
-        if *section_index >= section_count {
+        if *phase != WizardStepPhase::BundleAbout && *section_index >= section_count {
             *section_index = 0;
             *phase = WizardStepPhase::Text;
         }
@@ -273,8 +283,14 @@ impl DocumentWizardPanel {
 
         // Navigation state (buttons rendered below the current screen).
         let can_back = match *phase {
-            WizardStepPhase::About => wiz.doc_index > 0,
-            WizardStepPhase::Text => wiz.doc_index > 0 || *section_index > 0 || doc_has_about(wiz),
+            WizardStepPhase::BundleAbout => false,
+            WizardStepPhase::About => wiz.doc_index > 0 || bundle_has_about(wiz),
+            WizardStepPhase::Text => {
+                wiz.doc_index > 0
+                    || *section_index > 0
+                    || doc_has_about(wiz)
+                    || bundle_has_about(wiz)
+            }
             WizardStepPhase::Translation | WizardStepPhase::Inputs => true,
         };
 
@@ -314,17 +330,41 @@ impl DocumentWizardPanel {
 
         // Centerpiece: section text / translation / inputs.
         match *phase {
+            WizardStepPhase::BundleAbout => {
+                let Some(about) = current_bundle_about(wiz) else {
+                    *phase = if doc_has_about(wiz) {
+                        WizardStepPhase::About
+                    } else {
+                        WizardStepPhase::Text
+                    };
+                    return;
+                };
+
+                markdown_preview = Some(("About Document Bundle".to_string(), about.to_string()));
+
+                ui_doc_screen_skeleton_notice_above_header(
+                    ui,
+                    "About Document Bundle",
+                    "This section contains context information about the entire document bundle. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
+
+ i.e. only the document text itself is canonical.",
+                    |ui| {
+                        let mut text = about.to_string();
+                        ui_doc_text_window(ui, &mut text);
+                    },
+                );
+            }
             WizardStepPhase::About => {
                 let Some(about) = current_doc_about(wiz) else {
                     *phase = WizardStepPhase::Text;
                     return;
                 };
 
-                markdown_preview = Some(("About this Document".to_string(), about.to_string()));
+                markdown_preview = Some(("About Document".to_string(), about.to_string()));
 
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
-                    "About this Document",
+                    "About Document",
                     "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
 
  i.e. only the document text itself is canonical.",
@@ -552,10 +592,7 @@ impl DocumentWizardPanel {
                                 .default_open(false)
                                 .show(ui, |ui| {
                                     ui.horizontal_wrapped(|ui| {
-                                        ui.label(format!(
-                                            "Computed hash: {}",
-                                            d.computed_hash_hex
-                                        ));
+                                        ui.label(format!("Computed hash: {}", d.computed_hash_hex));
                                         ui.label("for");
 
                                         let link = ui.link("raw text");

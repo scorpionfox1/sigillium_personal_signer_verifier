@@ -11,6 +11,8 @@ use std::path::Path;
 pub struct BundleTemplate {
     pub template_id: Option<String>,
     pub template_desc: Option<String>,
+    /// Optional UI-only intro shown before the first document. Not part of signed material.
+    pub bundle_about: Option<String>,
     pub docs: Vec<DocTemplate>,
 }
 

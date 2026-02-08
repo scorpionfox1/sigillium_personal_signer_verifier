@@ -1,6 +1,7 @@
 {
   template_id: "sample_bundle_v1",
   template_desc: "Sample bundle demonstrating sections, translations, and inputs",
+  bundle_about: "This sample bundle demonstrates how bundle-level About text can be used to provide context for all documents before the user begins reading them. Like document About text, this content is informative only and is not signed.",
 
   docs: [
 
