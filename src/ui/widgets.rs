@@ -274,8 +274,6 @@ pub fn open_markdown_preview(title: &str, body: &str, msg: &mut PanelMsgState) {
         msg.set_warn(&format!("Failed to open preview in browser: {e}"));
         return;
     }
-
-    msg.set_success(&format!("Opened preview in browser: {}", path.display()));
 }
 
 fn markdown_preview_to_html(_title: &str, body: &str) -> String {
@@ -320,13 +318,4 @@ fn temp_markdown_filename() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     format!("sigillium-preview-{}.html", nanos)
-}
-
-fn escape_html(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }
