@@ -53,6 +53,7 @@ impl KeyRegistryPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
+                let dialog_width = ui.available_width().min(576.0);
                 widgets::panel_title(ui, "Key Registry");
                 ui.separator();
 
@@ -106,6 +107,7 @@ impl KeyRegistryPanel {
                         active_label.as_str(),
                         "Copy label",
                         None,
+                        dialog_width,
                         &mut self.msg,
                     );
 
@@ -117,6 +119,7 @@ impl KeyRegistryPanel {
                         &active_domain,
                         "Copy domain",
                         None,
+                        dialog_width,
                         &mut self.msg,
                     );
 
@@ -128,6 +131,7 @@ impl KeyRegistryPanel {
                         &active_assoc_id,
                         "Copy associated ID",
                         Some("—"),
+                        dialog_width,
                         &mut self.msg,
                     );
 
@@ -139,6 +143,7 @@ impl KeyRegistryPanel {
                         &active_pubkey_hex,
                         "Copy public key",
                         Some("No active key"),
+                        dialog_width,
                         &mut self.msg,
                     );
                 }
@@ -152,17 +157,27 @@ impl KeyRegistryPanel {
 
                     ui.add_enabled_ui(install_enabled, |ui| {
                         ui.label("Label");
-                        ui.add(egui::TextEdit::singleline(&mut self.label));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.label)
+                                .desired_width(dialog_width),
+                        );
 
                         ui.add_space(6.0);
 
                         ui.label("Mnemonic");
-                        ui.add(egui::TextEdit::multiline(&mut self.mnemonic).desired_rows(3));
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.mnemonic)
+                                .desired_rows(3)
+                                .desired_width(dialog_width),
+                        );
 
                         ui.add_space(6.0);
 
                         ui.label("Domain (optional; empty = default)");
-                        ui.add(egui::TextEdit::singleline(&mut self.domain));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.domain)
+                                .desired_width(dialog_width),
+                        );
 
                         ui.add_space(4.0);
 
@@ -184,7 +199,10 @@ impl KeyRegistryPanel {
                         ui.add_space(6.0);
 
                         ui.label("Associated Key ID (optional)");
-                        ui.add(egui::TextEdit::singleline(&mut self.associated_key_id));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.associated_key_id)
+                                .desired_width(dialog_width),
+                        );
 
                         ui.add_space(8.0);
 
@@ -331,11 +349,14 @@ fn copyable_readonly_field(
     value: &str,
     hover: &str,
     hint: Option<&str>,
+    dialog_width: f32,
     msg: &mut PanelMsgState,
 ) {
     widgets::copy_label_with_button(ui, label, value, hover, msg);
     let mut v = value.to_string();
-    let mut field = egui::TextEdit::singleline(&mut v).interactive(false);
+    let mut field = egui::TextEdit::singleline(&mut v)
+        .desired_width(dialog_width)
+        .interactive(false);
     if let Some(hint) = hint {
         field = field.hint_text(hint);
     }

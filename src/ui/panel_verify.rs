@@ -51,6 +51,7 @@ impl VerifyPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
+                let dialog_width = ui.available_width().min(576.0);
                 widgets::panel_title(ui, "Verify");
                 ui.separator();
 
@@ -128,10 +129,15 @@ impl VerifyPanel {
 
                 if let Some(pk) = active_pubkey_hex.as_deref() {
                     let mut s = pk.to_string();
-                    ui.add(egui::TextEdit::singleline(&mut s).interactive(false));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut s)
+                            .desired_width(dialog_width)
+                            .interactive(false),
+                    );
                 } else {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.pubkey_hex)
+                            .desired_width(dialog_width)
                             .hint_text("Paste hex public key…"),
                     );
                 }
@@ -149,6 +155,7 @@ impl VerifyPanel {
                 ui.add(
                     egui::TextEdit::multiline(&mut self.signature_b64)
                         .desired_rows(6)
+                        .desired_width(dialog_width)
                         .hint_text("Paste base64 signature…"),
                 );
 
@@ -172,6 +179,7 @@ impl VerifyPanel {
                 ui.add(
                     egui::TextEdit::multiline(&mut self.message)
                         .desired_rows(12)
+                        .desired_width(dialog_width)
                         .hint_text(match mode {
                             SignVerifyMode::Text => {
                                 "Paste the exact string message that was signed…"

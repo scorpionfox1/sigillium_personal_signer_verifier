@@ -278,7 +278,7 @@ pub fn open_markdown_preview(title: &str, body: &str, msg: &mut PanelMsgState) {
     msg.set_success(&format!("Opened preview in browser: {}", path.display()));
 }
 
-fn markdown_preview_to_html(title: &str, body: &str) -> String {
+fn markdown_preview_to_html(_title: &str, body: &str) -> String {
     use pulldown_cmark::{html, Options, Parser};
 
     let mut options = Options::empty();
@@ -296,7 +296,7 @@ fn markdown_preview_to_html(title: &str, body: &str) -> String {
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{}</title>
+  <title></title>
   <style>
     body {{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; line-height: 1.5; }}
     pre, code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
@@ -306,13 +306,10 @@ fn markdown_preview_to_html(title: &str, body: &str) -> String {
   </style>
 </head>
 <body>
-  <h1>{}</h1>
   {}
 </body>
 </html>
 "#,
-        escape_html(title),
-        escape_html(title),
         body_html
     )
 }

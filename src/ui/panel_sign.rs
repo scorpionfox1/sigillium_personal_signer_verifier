@@ -176,6 +176,7 @@ impl SignPanel {
 
                 // ---- Message (left) + Schema/Config (right)
                 ui.columns(2, |cols| {
+                    let left_width = cols[0].available_width().min(520.0);
                     // LEFT: message
                     cols[0].horizontal(|ui| {
                         ui.label("Message");
@@ -189,11 +190,15 @@ impl SignPanel {
                         );
                     });
 
-                    cols[0].add(
-                        egui::TextEdit::multiline(&mut self.message)
-                            .desired_rows(12)
-                            .hint_text("Message to sign…"),
-                    );
+                    cols[0].scope(|ui| {
+                        ui.set_max_width(left_width);
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.message)
+                                .desired_rows(12)
+                                .desired_width(left_width)
+                                .hint_text("Message to sign…"),
+                        );
+                    });
 
                     // RIGHT: schema + record config (stacked)
                     cols[1].vertical(|ui| {
@@ -347,6 +352,7 @@ r#"{
                 };
 
                 ui.columns(2, |cols| {
+                    let left_width = cols[0].available_width().min(520.0);
                     cols[0].horizontal(|ui| {
                         ui.label(left_label);
                         let ok = !self.output_text.trim().is_empty();
@@ -370,12 +376,16 @@ r#"{
                         }
                     });
 
-                    cols[0].add(
-                        egui::TextEdit::multiline(&mut self.output_text)
-                            .desired_rows(10)
-                            .interactive(false)
-                            .hint_text("Output will appear here…"),
-                    );
+                    cols[0].scope(|ui| {
+                        ui.set_max_width(left_width);
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.output_text)
+                                .desired_rows(10)
+                                .desired_width(left_width)
+                                .interactive(false)
+                                .hint_text("Output will appear here…"),
+                        );
+                    });
 
                     let w = cols[1].available_width().min(480.0);
 
