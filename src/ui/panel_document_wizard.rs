@@ -12,10 +12,12 @@ use std::path::PathBuf;
 use super::{Route, RoutePrefill};
 
 use sigillium_personal_signer_verifier_lib::command::document_wizard::{
-    self as dw, all_docs_have_no_template_errors, current_doc_about, doc_has_about, is_last_step,
-    step_back, step_next, validate_current_section_inputs, WizardStepPhase,
+    self as dw, all_docs_have_no_template_errors, bundle_has_about, current_bundle_about,
+    current_doc_about, doc_has_about, is_last_step, step_back, step_next,
+    validate_current_section_inputs, WizardStepPhase,
 };
 use sigillium_personal_signer_verifier_lib::template::doc_wizard::{InputSpec, InputType};
+use sigillium_personal_signer_verifier_lib::template::doc_wizard_verify::canonical_doc_text_from_sections;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WizardPanelMode {
@@ -104,18 +106,25 @@ impl DocumentWizardPanel {
                         .map(|d| d.sections.len())
                         .unwrap_or(0);
 
-                    let section_num = match self.phase {
-                        WizardStepPhase::About => 0,
-                        _ => self.section_index.saturating_add(1),
+                    let label = if matches!(self.mode, WizardPanelMode::ReviewBuild)
+                        || matches!(self.phase, WizardStepPhase::BundleAbout)
+                    {
+                        format!("Doc 0 of {}", doc_count.max(1))
+                    } else {
+                        let section_num = match self.phase {
+                            WizardStepPhase::About => 0,
+                            _ => self.section_index.saturating_add(1),
+                        };
+                        format!(
+                            "Doc {} of {} — Section {} of {}",
+                            doc_index.saturating_add(1),
+                            doc_count.max(1),
+                            section_num,
+                            section_count,
+                        )
                     };
 
-                    ui.label(format!(
-                        "Doc {} of {} — Section {} of {}",
-                        doc_index.saturating_add(1),
-                        doc_count.max(1),
-                        section_num,
-                        section_count,
-                    ));
+                    ui.label(label);
                     ui.add_space(6.0);
                 }
 
@@ -212,7 +221,9 @@ impl DocumentWizardPanel {
                                     self.wizard = Some(w);
                                     self.msg.clear();
                                     if let Some(wiz) = self.wizard.as_ref() {
-                                        self.phase = if doc_has_about(wiz) {
+                                        self.phase = if bundle_has_about(wiz) {
+                                            WizardStepPhase::BundleAbout
+                                        } else if doc_has_about(wiz) {
                                             WizardStepPhase::About
                                         } else {
                                             WizardStepPhase::Text
@@ -259,7 +270,7 @@ impl DocumentWizardPanel {
             .map(|d| d.sections.len())
             .unwrap_or(0);
 
-        if *section_index >= section_count {
+        if *phase != WizardStepPhase::BundleAbout && *section_index >= section_count {
             *section_index = 0;
             *phase = WizardStepPhase::Text;
         }
@@ -272,8 +283,14 @@ impl DocumentWizardPanel {
 
         // Navigation state (buttons rendered below the current screen).
         let can_back = match *phase {
-            WizardStepPhase::About => wiz.doc_index > 0,
-            WizardStepPhase::Text => wiz.doc_index > 0 || *section_index > 0 || doc_has_about(wiz),
+            WizardStepPhase::BundleAbout => false,
+            WizardStepPhase::About => wiz.doc_index > 0 || bundle_has_about(wiz),
+            WizardStepPhase::Text => {
+                wiz.doc_index > 0
+                    || *section_index > 0
+                    || doc_has_about(wiz)
+                    || bundle_has_about(wiz)
+            }
             WizardStepPhase::Translation | WizardStepPhase::Inputs => true,
         };
 
@@ -309,20 +326,44 @@ impl DocumentWizardPanel {
             }
         }
 
+        let mut markdown_preview: Option<(String, String)> = None;
+
         // Centerpiece: section text / translation / inputs.
         match *phase {
+            WizardStepPhase::BundleAbout => {
+                let Some(about) = current_bundle_about(wiz) else {
+                    *phase = if doc_has_about(wiz) {
+                        WizardStepPhase::About
+                    } else {
+                        WizardStepPhase::Text
+                    };
+                    return;
+                };
+
+                markdown_preview = Some(("About Bundle".to_string(), about.to_string()));
+
+                ui_doc_screen_skeleton_notice_above_header(
+                    ui,
+                    "About Bundle",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle of one or more documents you are about to read and ultimately sign.",
+                    |ui| {
+                        let mut text = about.to_string();
+                        ui_doc_text_window(ui, &mut text);
+                    },
+                );
+            }
             WizardStepPhase::About => {
                 let Some(about) = current_doc_about(wiz) else {
                     *phase = WizardStepPhase::Text;
                     return;
                 };
 
+                markdown_preview = Some(("About Document".to_string(), about.to_string()));
+
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
-                    "About this Document",
-                    "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
-
- i.e. only the document text itself is canonical.",
+                    "About Document",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the single document you are about to read and ultimately sign.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -335,6 +376,7 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
+                markdown_preview = Some((format!("{} (section)", doc_label), section.text.clone()));
                 ui_section_text(ui, &doc_label, section);
             }
             WizardStepPhase::Translation => {
@@ -342,6 +384,12 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
+                if let Some(translation) = section.translation.as_ref() {
+                    markdown_preview = Some((
+                        format!("{} (translation)", doc_label),
+                        translation.text.clone(),
+                    ));
+                }
                 ui_section_translation(ui, &doc_label, section);
             }
             WizardStepPhase::Inputs => {
@@ -373,6 +421,17 @@ impl DocumentWizardPanel {
                         msg.set_warn(&format!("{e}"));
                     } else {
                         msg.clear();
+                    }
+                }
+
+                let preview_btn = widgets::large_button("View in Browser")
+                    .min_size(egui::vec2(150.0, button_height));
+                if ui
+                    .add_enabled(markdown_preview.is_some(), preview_btn)
+                    .clicked()
+                {
+                    if let Some((title, body)) = markdown_preview.as_ref() {
+                        widgets::open_markdown_preview(title, body, msg);
                     }
                 }
 
@@ -481,8 +540,8 @@ impl DocumentWizardPanel {
         let avail = ui.available_width().max(1.0);
 
         // Keep the hash column readable even on narrow windows.
-        let right_w = (avail * 0.34).clamp(260.0, 420.0);
-        let left_w = (avail - gap - right_w).max(260.0);
+        let right_w = (avail * 0.42).clamp(280.0, 520.0);
+        let left_w = (avail - gap - right_w).max(280.0);
 
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
             ui.allocate_ui_with_layout(
@@ -493,14 +552,13 @@ impl DocumentWizardPanel {
                         widgets::section_header(ui, "Document bundle");
 
                         let can_copy = !bundle_out.trim().is_empty();
-                        if widgets::copy_json_icon_button(
+                        widgets::copy_json_icon_button(
                             ui,
                             can_copy,
                             "Copy document bundle",
                             bundle_out.trim(),
-                        ) {
-                            msg.set_success("Copied document bundle JSON to clipboard.");
-                        }
+                            msg,
+                        );
                     });
 
                     ui.add_space(6.0);
@@ -520,30 +578,44 @@ impl DocumentWizardPanel {
                 egui::vec2(right_w, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    widgets::section_header(ui, "Individual document hashes");
+                    widgets::section_header(ui, "Document hashes & raw text");
                     ui.add_space(6.0);
 
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false; 2])
-                        .show(ui, |ui| {
-                            for (i, d) in wiz.docs.iter().enumerate() {
-                                let title = format!(
-                                    "Doc {}/{} — {}",
-                                    i + 1,
-                                    wiz.docs.len(),
-                                    d.doc_identity.label
-                                );
-
-                                egui::CollapsingHeader::new(title).default_open(false).show(
-                                    ui,
-                                    |ui| {
+                    ui.vertical(|ui| {
+                        for (i, d) in wiz.docs.iter().enumerate() {
+                            let header_label = format!("• {}", d.doc_identity.label);
+                            egui::CollapsingHeader::new(header_label)
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ui.horizontal_wrapped(|ui| {
                                         ui.label(format!("Computed hash: {}", d.computed_hash_hex));
-                                    },
-                                );
+                                        ui.label("for");
 
-                                ui.add_space(4.0);
-                            }
-                        });
+                                        let link = ui.link("raw text");
+                                        if link.clicked() {
+                                            let filename =
+                                                default_raw_text_filename(i, &d.doc_identity.label);
+                                            let canonical_text = doc_raw_text(d);
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .set_file_name(&filename)
+                                                .save_file()
+                                            {
+                                                match std::fs::write(&path, canonical_text) {
+                                                    Ok(()) => msg.set_success(&format!(
+                                                        "Saved raw document text to {}",
+                                                        path.display()
+                                                    )),
+                                                    Err(e) => msg.set_warn(&format!(
+                                                        "Failed to save raw document text: {e}"
+                                                    )),
+                                                }
+                                            }
+                                        }
+                                    });
+                                });
+                            ui.add_space(4.0);
+                        }
+                    });
                 },
             );
         });
@@ -582,21 +654,29 @@ fn ui_doc_screen_skeleton(
     header: Option<&str>,
     body: impl FnOnce(&mut egui::Ui),
 ) {
-    ui.vertical_centered(|ui| {
-        let w = ui.available_width().min(1250.0);
-        ui.set_width(w);
+    widgets::doc_panel_container_with_header(ui, header, body);
+}
 
-        // Intentionally no border: keep it boring and clean.
-        egui::Frame::NONE
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                if let Some(h) = header {
-                    widgets::screen_header(ui, h);
-                    ui.add_space(6.0);
-                }
-                body(ui);
-            });
-    });
+fn doc_raw_text(doc: &dw::DocRunState) -> String {
+    canonical_doc_text_from_sections(doc.sections.iter().map(|section| section.text.as_str()))
+}
+
+fn default_raw_text_filename(index: usize, label: &str) -> String {
+    let mut slug = String::with_capacity(label.len());
+    for ch in label.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+        } else if ch.is_ascii_whitespace() || ch == '-' || ch == '_' {
+            slug.push('_');
+        }
+    }
+
+    let slug = slug.trim_matches('_');
+    if slug.is_empty() {
+        format!("raw-document-text-{}.txt", index + 1)
+    } else {
+        format!("raw-document-text-{}-{}.txt", index + 1, slug)
+    }
 }
 
 fn ui_doc_screen_skeleton_notice_above_header(
@@ -605,19 +685,12 @@ fn ui_doc_screen_skeleton_notice_above_header(
     notice: &str,
     body: impl FnOnce(&mut egui::Ui),
 ) {
-    ui.vertical_centered(|ui| {
-        let w = ui.available_width().min(1250.0);
-        ui.set_width(w);
-
-        egui::Frame::NONE
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
-                ui.add_space(8.0);
-                widgets::screen_header(ui, header);
-                ui.add_space(6.0);
-                body(ui);
-            });
+    widgets::doc_panel_container(ui, |ui| {
+        widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
+        ui.add_space(8.0);
+        widgets::screen_header(ui, header);
+        ui.add_space(6.0);
+        body(ui);
     });
 }
 
@@ -662,9 +735,7 @@ fn ui_section_translation(
     };
 
     let header = format!("{} (translation)", doc_label);
-    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
-
-Please confirm the translation yourself or rely on someone you trust who has already done so.", |ui| {
+    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "THIS SECTION IS NOT SIGNED. It is a translation of the text of the preceding section provided for convenience, but since it is not signed it is not authoritative. Please confirm the translation at will.", |ui| {
         ui.label(format!("Language: {}", t.lang));
         ui.add_space(6.0);
 

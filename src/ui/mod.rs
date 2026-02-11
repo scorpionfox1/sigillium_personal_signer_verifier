@@ -1,6 +1,7 @@
 // src/ui/mod.rs
 
 pub mod nav;
+pub mod panel_about;
 pub mod panel_document_wizard;
 pub mod panel_key_registry;
 pub mod panel_keyfile_create;
@@ -24,6 +25,7 @@ use route_policy::{
 };
 
 use message::PanelMsgState;
+use panel_about::AboutPanel;
 use panel_document_wizard::DocumentWizardPanel;
 use panel_key_registry::KeyRegistryPanel;
 use panel_keyfile_create::CreateKeyfilePanel;
@@ -34,7 +36,7 @@ use panel_sign::SignPanel;
 use panel_verify::VerifyPanel;
 use sigillium_personal_signer_verifier_lib::command_state::lock_app_inner_if_unlocked;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
-use sigillium_personal_signer_verifier_lib::error::AppError;
+use sigillium_personal_signer_verifier_lib::notices::AppNotice;
 use sigillium_personal_signer_verifier_lib::security_log::take_best_effort_warn_pending;
 use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
 
@@ -45,6 +47,7 @@ pub enum Route {
     Locked,
     Sign,
     Verify,
+    About,
     DocumentWizard,
     KeyRegistry,
     Security,
@@ -81,6 +84,7 @@ pub struct UiApp {
     lock: LockPanel,
     sign: SignPanel,
     verify: VerifyPanel,
+    about: AboutPanel,
     key_registry: KeyRegistryPanel,
     document_wizard: DocumentWizardPanel,
     security: SecurityPanel,
@@ -120,6 +124,7 @@ impl UiApp {
             lock: LockPanel::new(),
             sign: SignPanel::new(),
             verify: VerifyPanel::new(),
+            about: AboutPanel::new(),
             key_registry: KeyRegistryPanel::new(),
             document_wizard: DocumentWizardPanel::new(),
             security: SecurityPanel::new(),
@@ -135,6 +140,7 @@ impl UiApp {
         self.lock.reset_inputs();
         self.sign.reset_inputs();
         self.verify.reset_inputs();
+        self.about.reset_inputs();
         self.key_registry.reset_inputs();
         self.document_wizard.reset_inputs();
         self.security.reset_inputs();
@@ -245,6 +251,7 @@ impl eframe::App for UiApp {
                     self.create_keyfile.clear_messages();
                     self.sign.clear_messages();
                     self.verify.clear_messages();
+                    self.about.clear_messages();
                     self.key_registry.clear_messages();
                     self.document_wizard.clear_messages();
                     self.security.clear_messages();
@@ -278,7 +285,7 @@ impl eframe::App for UiApp {
 
         if take_best_effort_warn_pending(self.state.as_ref()) {
             self.best_effort_warn
-                .from_app_error(&AppError::PlatformHardeningFailed);
+                .from_app_error(&AppNotice::PlatformHardeningFailed);
         }
 
         let nav_model = self.derive_nav_model(rctx);
@@ -371,6 +378,10 @@ impl eframe::App for UiApp {
                 Route::Verify => {
                     self.verify
                         .ui(ui, self.state.as_ref(), &self.ctx, &mut self.route)
+                }
+
+                Route::About => {
+                    self.about.ui(ui);
                 }
 
                 Route::KeyRegistry => {

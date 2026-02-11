@@ -8,7 +8,7 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
-    error::AppError,
+    notices::AppNotice,
     types::{AppState, KeyId, SignVerifyMode},
 };
 
@@ -51,11 +51,12 @@ impl VerifyPanel {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
+                let dialog_width = ui.available_width().min(576.0);
                 widgets::panel_title(ui, "Verify");
                 ui.separator();
 
                 let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-                let mut active_key_error: Option<AppError> = None;
+                let mut active_key_error: Option<AppNotice> = None;
                 ui.horizontal(|ui| {
                     ui.label("Key:");
                     if let Err(e) = widgets::active_key_selector(
@@ -70,7 +71,7 @@ impl VerifyPanel {
                     }
                 });
                 if let Some(e) = active_key_error {
-                    if let AppError::KeyfileQuarantined { .. } = e {
+                    if let AppNotice::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;
                         return;
                     }
@@ -115,17 +116,28 @@ impl VerifyPanel {
                 });
 
                 if let Some(pk) = active_pubkey_hex.as_deref() {
-                    widgets::copy_label_with_button(ui, "Public key (hex)", pk, "Copy public key");
+                    widgets::copy_label_with_button(
+                        ui,
+                        "Public key (hex)",
+                        pk,
+                        "Copy public key",
+                        &mut self.msg,
+                    );
                 } else {
                     ui.label("Public key (hex)");
                 }
 
                 if let Some(pk) = active_pubkey_hex.as_deref() {
                     let mut s = pk.to_string();
-                    ui.add(egui::TextEdit::singleline(&mut s).interactive(false));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut s)
+                            .desired_width(dialog_width)
+                            .interactive(false),
+                    );
                 } else {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.pubkey_hex)
+                            .desired_width(dialog_width)
                             .hint_text("Paste hex public key…"),
                     );
                 }
@@ -137,11 +149,13 @@ impl VerifyPanel {
                     "Signature (base64)",
                     &self.signature_b64,
                     "Copy signature",
+                    &mut self.msg,
                 );
 
                 ui.add(
                     egui::TextEdit::multiline(&mut self.signature_b64)
                         .desired_rows(6)
+                        .desired_width(dialog_width)
                         .hint_text("Paste base64 signature…"),
                 );
 
@@ -154,13 +168,18 @@ impl VerifyPanel {
                 ui.horizontal(|ui| {
                     ui.label(message_label);
                     let ok = !self.message.trim().is_empty();
-                    if widgets::copy_icon_button(ui, ok, "Copy message") {
-                        ui.ctx().copy_text(self.message.clone());
-                    }
+                    widgets::copy_value_with_button(
+                        ui,
+                        ok,
+                        "Copy message",
+                        &self.message,
+                        &mut self.msg,
+                    );
                 });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.message)
                         .desired_rows(12)
+                        .desired_width(dialog_width)
                         .hint_text(match mode {
                             SignVerifyMode::Text => {
                                 "Paste the exact string message that was signed…"
@@ -174,7 +193,10 @@ impl VerifyPanel {
                 ui.horizontal(|ui| {
                     let can_verify = current_active_id.is_some();
                     if ui
-                        .add_enabled(can_verify, egui::Button::new(egui::RichText::new("Verify").strong()))
+                        .add_enabled(
+                            can_verify,
+                            egui::Button::new(egui::RichText::new("Verify").strong()),
+                        )
                         .clicked()
                     {
                         self.clear_messages();
@@ -242,7 +264,7 @@ impl VerifyPanel {
                             Ok(true) => self.msg.set_info("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),
                             Err(e) => {
-                                if let AppError::KeyfileQuarantined { .. } = e {
+                                if let AppNotice::KeyfileQuarantined { .. } = e {
                                     *route = Route::KeyfileSelect;
                                     return;
                                 }

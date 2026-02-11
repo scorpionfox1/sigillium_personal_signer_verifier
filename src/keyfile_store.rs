@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{error::AppResult, keyfile::KEYFILE_FILENAME, platform::secure_delete_best_effort};
+use crate::{keyfile::KEYFILE_FILENAME, notices::AppResult, platform::secure_delete_best_effort};
 
 #[derive(Debug, Clone)]
 pub struct KeyfileListing {

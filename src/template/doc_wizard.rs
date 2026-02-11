@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
@@ -10,6 +11,8 @@ use std::path::Path;
 pub struct BundleTemplate {
     pub template_id: Option<String>,
     pub template_desc: Option<String>,
+    /// Optional UI-only intro shown before the first document. Not part of signed material.
+    pub bundle_about: Option<String>,
     pub docs: Vec<DocTemplate>,
 }
 
@@ -142,6 +145,8 @@ pub fn validate_template(tpl: &BundleTemplate) -> Result<(), TemplateLoadError> 
         ));
     }
 
+    let mut doc_labels = BTreeSet::new();
+    let mut doc_id_vers = BTreeSet::new();
     for (i, d) in tpl.docs.iter().enumerate() {
         if d.doc_identity.id.trim().is_empty() {
             return Err(TemplateLoadError::Validation(format!(
@@ -153,9 +158,26 @@ pub fn validate_template(tpl: &BundleTemplate) -> Result<(), TemplateLoadError> 
                 "docs[{i}].doc_identity.label must be non-empty"
             )));
         }
+        if !doc_labels.insert(d.doc_identity.label.trim().to_string()) {
+            return Err(TemplateLoadError::Validation(format!(
+                "docs[{i}].doc_identity.label must be unique; duplicate found for '{}'",
+                d.doc_identity.label
+            )));
+        }
         if d.doc_identity.ver.trim().is_empty() {
             return Err(TemplateLoadError::Validation(format!(
                 "docs[{i}].doc_identity.ver must be non-empty"
+            )));
+        }
+        let id_ver = format!(
+            "{}{}",
+            d.doc_identity.id.trim(),
+            d.doc_identity.ver.trim()
+        );
+        if !doc_id_vers.insert(id_ver) {
+            return Err(TemplateLoadError::Validation(format!(
+                "docs[{i}].doc_identity.id + ver must be unique; duplicate found for id '{}' ver '{}'",
+                d.doc_identity.id, d.doc_identity.ver
             )));
         }
 

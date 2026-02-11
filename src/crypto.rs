@@ -1,6 +1,6 @@
 // src/crypto.rs
 
-use crate::error::AppError;
+use crate::notices::AppNotice;
 use bip39::Mnemonic;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use hex;
@@ -14,14 +14,14 @@ const DOMAIN_DELIM: u8 = 0x00;
 pub fn derive_private_key_from_mnemonic_and_domain(
     mnemonic: &str,
     domain: &str,
-) -> Result<[u8; 32], AppError> {
-    let mnemonic = Mnemonic::parse(mnemonic).map_err(|_| AppError::InvalidMnemonic)?;
+) -> Result<[u8; 32], AppNotice> {
+    let mnemonic = Mnemonic::parse(mnemonic).map_err(|_| AppNotice::InvalidMnemonic)?;
 
     // BIP39 seed (64 bytes), zeroized on drop
     let seed = Zeroizing::new(mnemonic.to_seed(""));
 
     let mut mac =
-        Hmac::<Sha512>::new_from_slice(&seed[..]).map_err(|_| AppError::CryptoInitFailed)?;
+        Hmac::<Sha512>::new_from_slice(&seed[..]).map_err(|_| AppNotice::CryptoInitFailed)?;
 
     mac.update(&[DOMAIN_DELIM]);
     mac.update(domain.as_bytes());
@@ -46,10 +46,11 @@ pub fn public_key_from_private(private: &[u8; 32]) -> [u8; 32] {
     out
 }
 
-pub fn decode_public_key_hex(public_key_hex: &str) -> Result<[u8; 32], AppError> {
-    let pk_bytes = hex::decode(public_key_hex.trim()).map_err(|_| AppError::InvalidPublicKeyHex)?;
+pub fn decode_public_key_hex(public_key_hex: &str) -> Result<[u8; 32], AppNotice> {
+    let pk_bytes =
+        hex::decode(public_key_hex.trim()).map_err(|_| AppNotice::InvalidPublicKeyHex)?;
     if pk_bytes.len() != 32 {
-        return Err(AppError::InvalidPublicKeyLength);
+        return Err(AppNotice::InvalidPublicKeyLength);
     }
 
     let mut pk = [0u8; 32];
@@ -70,9 +71,9 @@ pub fn verify_message(
     public_key: &[u8; 32],
     message: &[u8],
     signature: &[u8; 64],
-) -> Result<bool, AppError> {
+) -> Result<bool, AppNotice> {
     let verifying_key =
-        VerifyingKey::from_bytes(public_key).map_err(|_| AppError::InvalidPublicKey)?;
+        VerifyingKey::from_bytes(public_key).map_err(|_| AppNotice::InvalidPublicKey)?;
 
     let signature = Signature::from_bytes(signature);
     Ok(verifying_key.verify(message, &signature).is_ok())
@@ -92,7 +93,7 @@ mod tests {
     #[test]
     fn derive_private_key_rejects_invalid_mnemonic() {
         match derive_private_key_from_mnemonic_and_domain("not a real mnemonic", "example") {
-            Err(AppError::InvalidMnemonic) => {}
+            Err(AppNotice::InvalidMnemonic) => {}
             other => panic!("expected InvalidMnemonic, got {:?}", other),
         }
     }

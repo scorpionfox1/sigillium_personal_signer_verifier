@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::{append_key, read_master_key, write_blank_keyfile};
-use crate::{error::AppResult, keyfile::KEYFILE_FILENAME};
+use crate::{keyfile::KEYFILE_FILENAME, notices::AppResult};
 
 pub struct OpsFixture {
     pub dir: PathBuf,

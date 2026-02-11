@@ -28,6 +28,22 @@ pub fn section_has_inputs(s: &SectionTemplate) -> bool {
         .unwrap_or(false)
 }
 
+pub fn bundle_has_about(wiz: &WizardState) -> bool {
+    wiz.template
+        .bundle_about
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+pub fn current_bundle_about(wiz: &WizardState) -> Option<&str> {
+    wiz.template
+        .bundle_about
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+}
+
 pub fn doc_has_about(wiz: &WizardState) -> bool {
     wiz.docs
         .get(wiz.doc_index)
@@ -49,6 +65,15 @@ pub fn step_next(
     section_index: &mut usize,
     phase: &mut WizardStepPhase,
 ) -> Result<(), WizardError> {
+    if matches!(*phase, WizardStepPhase::BundleAbout) {
+        *phase = if doc_has_about(wiz) {
+            WizardStepPhase::About
+        } else {
+            WizardStepPhase::Text
+        };
+        return Ok(());
+    }
+
     // About step: just move into the normal section flow (or skip doc if no sections).
     if matches!(*phase, WizardStepPhase::About) {
         let has_sections = wiz
@@ -98,7 +123,7 @@ pub fn step_next(
         }
 
         // Should be unreachable because About returns above, but keeps match exhaustive and future-proof.
-        WizardStepPhase::About => {}
+        WizardStepPhase::About | WizardStepPhase::BundleAbout => {}
     }
 
     Ok(())
@@ -140,8 +165,16 @@ pub fn step_back(
     section_index: &mut usize,
     phase: &mut WizardStepPhase,
 ) -> Result<(), WizardError> {
+    if matches!(*phase, WizardStepPhase::BundleAbout) {
+        return Ok(());
+    }
+
     // About step: back to previous doc end (or no-op if already at first doc).
     if matches!(*phase, WizardStepPhase::About) {
+        if wiz.doc_index == 0 && bundle_has_about(wiz) {
+            *phase = WizardStepPhase::BundleAbout;
+            return Ok(());
+        }
         back_to_prev_section_or_doc(wiz, section_index, phase)?;
         return Ok(());
     }
@@ -149,6 +182,15 @@ pub fn step_back(
     // If we're at the first section text and this doc has About, go back to About.
     if matches!(*phase, WizardStepPhase::Text) && *section_index == 0 && doc_has_about(wiz) {
         *phase = WizardStepPhase::About;
+        return Ok(());
+    }
+
+    if matches!(*phase, WizardStepPhase::Text)
+        && *section_index == 0
+        && wiz.doc_index == 0
+        && bundle_has_about(wiz)
+    {
+        *phase = WizardStepPhase::BundleAbout;
         return Ok(());
     }
 
@@ -176,7 +218,7 @@ pub fn step_back(
         }
 
         // Unreachable due to early return above, but keeps the match exhaustive.
-        WizardStepPhase::About => {}
+        WizardStepPhase::About | WizardStepPhase::BundleAbout => {}
     }
 
     Ok(())
@@ -190,6 +232,13 @@ pub fn back_to_prev_section_or_doc(
     if *section_index > 0 {
         *section_index -= 1;
         set_phase_to_last_step_in_section(wiz, *section_index, phase);
+        return Ok(());
+    }
+
+    if wiz.doc_index == 0 {
+        if bundle_has_about(wiz) {
+            *phase = WizardStepPhase::BundleAbout;
+        }
         return Ok(());
     }
 
@@ -233,6 +282,10 @@ pub fn is_last_step(wiz: &WizardState, section_index: usize, phase: WizardStepPh
         return true;
     };
 
+    if matches!(phase, WizardStepPhase::BundleAbout) {
+        return doc_count == 0;
+    }
+
     // About is never the last step if there are any sections.
     if matches!(phase, WizardStepPhase::About) {
         return doc.sections.is_empty() && (doc_index + 1 >= doc_count);
@@ -260,6 +313,7 @@ pub fn is_last_step(wiz: &WizardState, section_index: usize, phase: WizardStepPh
         }
         WizardStepPhase::Inputs => {}
         WizardStepPhase::About => return doc.sections.is_empty() && (doc_index + 1 >= doc_count),
+        WizardStepPhase::BundleAbout => return doc_count == 0,
     }
 
     if section_index + 1 < section_count {

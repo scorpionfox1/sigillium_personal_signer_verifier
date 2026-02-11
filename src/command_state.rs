@@ -1,7 +1,7 @@
 // src/command_state.rs
 
 use crate::{
-    error::{AppError, AppResult},
+    notices::{AppNotice, AppResult},
     security_log::record_best_effort_platform_failures,
     types::{AppState, SecretsState, SessionState},
 };
@@ -16,21 +16,21 @@ pub fn lock_session<'a>(state: &'a AppState) -> AppResult<MutexGuard<'a, Session
     state
         .session
         .lock()
-        .map_err(|_| AppError::StateLockPoisoned)
+        .map_err(|_| AppNotice::StateLockPoisoned)
 }
 
 pub fn lock_secrets<'a>(state: &'a AppState) -> AppResult<MutexGuard<'a, Option<SecretsState>>> {
     state
         .secrets
         .lock()
-        .map_err(|_| AppError::StateLockPoisoned)
+        .map_err(|_| AppNotice::StateLockPoisoned)
 }
 
 // ======================================================
 // key access helpers (String boundary preserved)
 // ======================================================
 
-fn app_err_to_string(e: AppError) -> String {
+fn app_err_to_string(e: AppNotice) -> String {
     e.to_string()
 }
 
@@ -39,7 +39,7 @@ pub fn with_master_key<T>(
     f: impl FnOnce(&Zeroizing<[u8; 32]>) -> AppResult<T>,
 ) -> AppResult<T> {
     let guard = lock_secrets(state)?;
-    let secrets = guard.as_ref().ok_or(AppError::AppLocked)?;
+    let secrets = guard.as_ref().ok_or(AppNotice::AppLocked)?;
     f(&secrets.master_key)
 }
 
@@ -50,11 +50,11 @@ pub fn with_active_private<T>(
     let guard = lock_secrets(state).map_err(app_err_to_string)?;
     let secrets = guard
         .as_ref()
-        .ok_or_else(|| AppError::AppLocked.to_string())?;
+        .ok_or_else(|| AppNotice::AppLocked.to_string())?;
     let privk = secrets
         .active_private
         .as_ref()
-        .ok_or_else(|| AppError::NoActiveKeySelected.to_string())?;
+        .ok_or_else(|| AppNotice::NoActiveKeySelected.to_string())?;
     f(privk)
 }
 
@@ -110,7 +110,7 @@ pub fn lock_app_inner(state: &AppState, context: &str) -> Result<(), String> {
     state
         .keys
         .lock()
-        .map_err(|_| AppError::StateLockPoisoned.to_string())?
+        .map_err(|_| AppNotice::StateLockPoisoned.to_string())?
         .clear();
 
     Ok(())
@@ -174,7 +174,7 @@ mod tests {
         let state = mk_state();
 
         match with_master_key(&state, |_| Ok(())) {
-            Err(AppError::AppLocked) => {}
+            Err(AppNotice::AppLocked) => {}
             other => panic!("expected AppLocked, got {:?}", other),
         }
     }
@@ -197,7 +197,7 @@ mod tests {
         let state = mk_state();
 
         match with_active_private(&state, |_| Ok(())) {
-            Err(s) => assert_eq!(s, AppError::AppLocked.to_string()),
+            Err(s) => assert_eq!(s, AppNotice::AppLocked.to_string()),
             Ok(_) => panic!("expected error"),
         }
     }
@@ -208,7 +208,7 @@ mod tests {
         unlock_with_master(&state, [1u8; 32]);
 
         match with_active_private(&state, |_| Ok(())) {
-            Err(s) => assert_eq!(s, AppError::NoActiveKeySelected.to_string()),
+            Err(s) => assert_eq!(s, AppNotice::NoActiveKeySelected.to_string()),
             Ok(_) => panic!("expected error"),
         }
     }

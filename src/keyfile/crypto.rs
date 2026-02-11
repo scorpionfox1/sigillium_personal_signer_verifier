@@ -1,11 +1,11 @@
 // src/keyfile/crypto.rs
 
 use crate::{
-    error::{AppError, AppResult},
     keyfile::{
         types::{AadBytes, AadKind, KeyfileAad},
         KeyfileData,
     },
+    notices::{AppNotice, AppResult},
     types::KeyId,
 };
 use argon2::{Argon2, Params};
@@ -26,18 +26,18 @@ use zeroize::Zeroizing;
 /// Note: There is no “no salt” value in this API—only `&[]` vs non-empty.
 pub fn derive_encryption_key(passphrase: &str, salt: &[u8]) -> AppResult<[u8; 32]> {
     if !salt.is_empty() && salt.len() < 16 {
-        return Err(AppError::InvalidSaltLength { len: salt.len() });
+        return Err(AppNotice::InvalidSaltLength { len: salt.len() });
     }
 
     let params = Params::new(64 * 1024, 3, 1, Some(32))
-        .map_err(|e| AppError::CryptoKdfParamsFailed(e.to_string()))?;
+        .map_err(|e| AppNotice::CryptoKdfParamsFailed(e.to_string()))?;
 
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
     let mut out = [0u8; 32];
     argon2
         .hash_password_into(passphrase.as_bytes(), salt, &mut out)
-        .map_err(|e| AppError::CryptoKdfFailed(e.to_string()))?;
+        .map_err(|e| AppNotice::CryptoKdfFailed(e.to_string()))?;
 
     Ok(out)
 }
@@ -53,7 +53,7 @@ pub fn encrypt_bytes_with_aad(
     plaintext: &Zeroizing<Vec<u8>>,
 ) -> AppResult<([u8; 12], Vec<u8>)> {
     if aad.as_slice().is_empty() {
-        return Err(AppError::InvalidAad("aad was empty".to_string()));
+        return Err(AppNotice::InvalidAad("aad was empty".to_string()));
     }
 
     let cipher = cipher_from_master_key(master_key);
@@ -70,7 +70,7 @@ pub fn encrypt_bytes_with_aad(
                 aad: aad.as_slice(),
             },
         )
-        .map_err(|e| AppError::CryptoEncryptFailed(format!("{e:?}")))?;
+        .map_err(|e| AppNotice::CryptoEncryptFailed(format!("{e:?}")))?;
 
     Ok((nonce_bytes, ciphertext))
 }
@@ -87,11 +87,11 @@ pub fn decrypt_bytes_with_aad(
     ciphertext: &[u8],
 ) -> AppResult<Zeroizing<Vec<u8>>> {
     if aad.as_slice().is_empty() {
-        return Err(AppError::InvalidAad("aad was empty".to_string()));
+        return Err(AppNotice::InvalidAad("aad was empty".to_string()));
     }
 
     if nonce_bytes.len() != 12 {
-        return Err(AppError::InvalidNonceLength {
+        return Err(AppNotice::InvalidNonceLength {
             expected: 12,
             got: nonce_bytes.len(),
         });
@@ -108,7 +108,7 @@ pub fn decrypt_bytes_with_aad(
                 aad: aad.as_slice(),
             },
         )
-        .map_err(|e| AppError::CryptoDecryptFailed(format!("{e:?}")))?;
+        .map_err(|e| AppNotice::CryptoDecryptFailed(format!("{e:?}")))?;
 
     Ok(Zeroizing::new(pt))
 }
@@ -137,12 +137,12 @@ pub fn decrypt_string_with_aad(
 
     let ciphertext = general_purpose::STANDARD
         .decode(ciphertext_b64)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     let plaintext = decrypt_bytes_with_aad(master_key, aad, &nonce, &ciphertext)?;
 
     let s =
-        String::from_utf8(plaintext.to_vec()).map_err(|e| AppError::InvalidUtf8(e.to_string()))?;
+        String::from_utf8(plaintext.to_vec()).map_err(|e| AppNotice::InvalidUtf8(e.to_string()))?;
 
     Ok(Zeroizing::new(s))
 }
@@ -150,10 +150,10 @@ pub fn decrypt_string_with_aad(
 pub fn decode_nonce12_b64(s: &str) -> AppResult<[u8; 12]> {
     let bytes = general_purpose::STANDARD
         .decode(s)
-        .map_err(|e| AppError::InvalidNonceBase64(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidNonceBase64(e.to_string()))?;
 
     if bytes.len() != 12 {
-        return Err(AppError::InvalidNonceLength {
+        return Err(AppNotice::InvalidNonceLength {
             expected: 12,
             got: bytes.len(),
         });
@@ -217,8 +217,8 @@ fn cipher_from_master_key(master_key: &Zeroizing<[u8; 32]>) -> ChaCha20Poly1305 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AppError;
     use crate::keyfile::types::{KEYFILE_FORMAT, KEYFILE_VERSION};
+    use crate::notices::AppNotice;
     use crate::types::KeyId;
     use base64::engine::general_purpose;
     use zeroize::Zeroizing;
@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn derive_encryption_key_rejects_empty_salt() {
         let err = derive_encryption_key("pw", &[]).unwrap_err();
-        assert!(matches!(err, AppError::CryptoKdfFailed(_)));
+        assert!(matches!(err, AppNotice::CryptoKdfFailed(_)));
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn derive_encryption_key_rejects_short_salt() {
         let err = derive_encryption_key("pw", &[0u8; 15]).unwrap_err();
-        assert!(matches!(err, AppError::InvalidSaltLength { len: 15 }));
+        assert!(matches!(err, AppNotice::InvalidSaltLength { len: 15 }));
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn decode_nonce12_b64_rejects_bad_base64() {
         let err = decode_nonce12_b64("not base64!!!").unwrap_err();
-        assert!(matches!(err, AppError::InvalidNonceBase64(_)));
+        assert!(matches!(err, AppNotice::InvalidNonceBase64(_)));
     }
 
     #[test]
@@ -280,7 +280,7 @@ mod tests {
         let err = decode_nonce12_b64(&s).unwrap_err();
         assert!(matches!(
             err,
-            AppError::InvalidNonceLength {
+            AppNotice::InvalidNonceLength {
                 expected: 12,
                 got: 11
             }
@@ -306,7 +306,7 @@ mod tests {
         let pt = Zeroizing::new(b"hello".to_vec());
 
         let err = encrypt_bytes_with_aad(&master_key, &aad, &pt).unwrap_err();
-        assert!(matches!(err, AppError::InvalidAad(_)));
+        assert!(matches!(err, AppNotice::InvalidAad(_)));
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
         let err = decrypt_bytes_with_aad(&master_key, &aad, &[0u8; 11], b"ct").unwrap_err();
         assert!(matches!(
             err,
-            AppError::InvalidNonceLength {
+            AppNotice::InvalidNonceLength {
                 expected: 12,
                 got: 11
             }
@@ -334,7 +334,7 @@ mod tests {
         let (nonce, ct) = encrypt_bytes_with_aad(&master_key, &aad1, &pt).unwrap();
         let err = decrypt_bytes_with_aad(&master_key, &aad2, &nonce, &ct).unwrap_err();
 
-        assert!(matches!(err, AppError::CryptoDecryptFailed(_)));
+        assert!(matches!(err, AppNotice::CryptoDecryptFailed(_)));
     }
 
     #[test]

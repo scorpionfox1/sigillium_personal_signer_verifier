@@ -5,9 +5,12 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
-    error::AppError,
+    notices::AppNotice,
     types::{AppState, KeyId, KeyMeta},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use super::message::PanelMsgState;
 
 pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
     ui.add_enabled(enabled, egui::Button::new("⧉"))
@@ -15,13 +18,36 @@ pub fn copy_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str) -> bool {
         .clicked()
 }
 
-pub fn copy_json_icon_button(ui: &mut egui::Ui, enabled: bool, hover: &str, value: &str) -> bool {
+fn notify_string_copied(msg: &mut PanelMsgState) {
+    msg.from_app_error(&AppNotice::StringCopied);
+}
+
+pub fn copy_value_with_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    hover: &str,
+    value: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
     if copy_icon_button(ui, enabled, hover) {
         ui.ctx().copy_text(value.to_string());
+        notify_string_copied(msg);
         return true;
     }
     false
 }
+
+pub fn copy_json_icon_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    hover: &str,
+    value: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
+    copy_value_with_button(ui, enabled, hover, value, msg)
+}
+
+pub const DOC_PANEL_MAX_WIDTH: f32 = 900.0;
 
 const LARGE_BUTTON_TEXT_SIZE: f32 = 17.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 16.0;
@@ -32,11 +58,19 @@ pub fn large_button(label: &str) -> egui::Button<'_> {
 }
 
 pub fn section_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(egui::RichText::new(label).strong().size(SECTION_HEADER_TEXT_SIZE));
+    ui.label(
+        egui::RichText::new(label)
+            .strong()
+            .size(SECTION_HEADER_TEXT_SIZE),
+    );
 }
 
 pub fn screen_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(egui::RichText::new(label).strong().size(SCREEN_HEADER_TEXT_SIZE));
+    ui.label(
+        egui::RichText::new(label)
+            .strong()
+            .size(SCREEN_HEADER_TEXT_SIZE),
+    );
 }
 
 pub fn panel_title(ui: &mut egui::Ui, label: &str) {
@@ -50,13 +84,44 @@ pub fn panel_title(ui: &mut egui::Ui, label: &str) {
     ui.label(egui::RichText::new(label).strong().size(heading_size));
 }
 
-pub fn copy_label_with_button(ui: &mut egui::Ui, label: &str, value: &str, hover: &str) -> bool {
+pub fn doc_panel_container(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui)) {
+    doc_panel_container_with_header(ui, None, body);
+}
+
+pub fn doc_panel_container_with_header(
+    ui: &mut egui::Ui,
+    header: Option<&str>,
+    body: impl FnOnce(&mut egui::Ui),
+) {
+    ui.vertical_centered(|ui| {
+        let w = ui.available_width().min(DOC_PANEL_MAX_WIDTH);
+        ui.set_width(w);
+
+        // Intentionally no border: keep it boring and clean.
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                if let Some(h) = header {
+                    screen_header(ui, h);
+                    ui.add_space(6.0);
+                }
+                body(ui);
+            });
+    });
+}
+
+pub fn copy_label_with_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &str,
+    hover: &str,
+    msg: &mut PanelMsgState,
+) -> bool {
     let mut copied = false;
     ui.horizontal(|ui| {
         ui.label(label);
         let ok = !value.trim().is_empty();
-        if copy_icon_button(ui, ok, hover) {
-            ui.ctx().copy_text(value.to_string());
+        if copy_value_with_button(ui, ok, hover, value, msg) {
             copied = true;
         }
     });
@@ -75,7 +140,7 @@ pub fn active_key_selector(
     route: &mut super::Route,
     id_salt: &'static str,
     metas: &[KeyMeta],
-) -> Result<Option<KeyId>, AppError> {
+) -> Result<Option<KeyId>, AppNotice> {
     let current_active_id: Option<KeyId> = lock_session(state).ok().and_then(|g| g.active_key_id);
 
     let mut choice: Option<KeyId> = current_active_id;
@@ -115,7 +180,7 @@ pub fn active_key_selector(
                 // If select failed due to quarantine/missing, clear active key and route to KeyfileSelect.
                 if matches!(
                     res,
-                    Err(AppError::KeyfileQuarantined { .. } | AppError::KeyfileMissing { .. })
+                    Err(AppNotice::KeyfileQuarantined { .. } | AppNotice::KeyfileMissing { .. })
                 ) {
                     let _ = command::clear_active_key(state);
                     *route = super::Route::KeyfileSelect;
@@ -148,12 +213,6 @@ fn ui_notice_inner(ui: &mut egui::Ui, body: &str) {
         .fill(fill)
         .corner_radius(egui::CornerRadius::same(8))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new("Notice")
-                    .size(18.0)
-                    .strong()
-                    .color(accent),
-            );
             ui.add_space(4.0);
             ui.label(body);
         });
@@ -188,4 +247,69 @@ pub fn ui_notice(ui: &mut egui::Ui, body: &str, align: NoticeAlign) {
             );
         }
     }
+}
+
+pub fn open_markdown_preview(title: &str, body: &str, msg: &mut PanelMsgState) {
+    let html = markdown_preview_to_html(title, body);
+    let filename = temp_markdown_filename();
+    let path = std::env::temp_dir().join(filename);
+
+    if let Err(e) = std::fs::write(&path, html) {
+        msg.set_warn(&format!("Failed to write preview HTML: {e}"));
+        return;
+    }
+
+    let Some(path_str) = path.to_str() else {
+        msg.set_warn("Failed to open preview: temp path is not valid UTF-8.");
+        return;
+    };
+
+    if let Err(e) = webbrowser::open(path_str) {
+        msg.set_warn(&format!("Failed to open preview in browser: {e}"));
+        return;
+    }
+}
+
+fn markdown_preview_to_html(_title: &str, body: &str) -> String {
+    use pulldown_cmark::{html, Options, Parser};
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
+
+    let parser = Parser::new_ext(body, options);
+    let mut body_html = String::new();
+    html::push_html(&mut body_html, parser);
+
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title></title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; line-height: 1.5; }}
+    pre, code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    pre {{ padding: 12px; background: #f4f4f4; overflow-x: auto; }}
+    table {{ border-collapse: collapse; }}
+    th, td {{ border: 1px solid #ccc; padding: 6px 10px; }}
+  </style>
+</head>
+<body>
+  {}
+</body>
+</html>
+"#,
+        body_html
+    )
+}
+
+fn temp_markdown_filename() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("sigillium-preview-{}.html", nanos)
 }

@@ -3,13 +3,13 @@
 use std::path::Path;
 
 use crate::{
-    error::{AppError, AppResult},
     keyfile::{
         crypto::*,
         fs::write_json,
         types::{EncryptedString, KeyEntry},
         validate::set_file_mac_in_place,
     },
+    notices::{AppNotice, AppResult},
     types::KeyId,
 };
 
@@ -79,7 +79,7 @@ pub fn remove_key(path: &Path, master_key: &[u8; 32], key_id: KeyId) -> AppResul
     let before = data.keys.len();
     data.keys.retain(|k| k.id != key_id);
     if before == data.keys.len() {
-        return Err(AppError::KeyfileKeyIdNotFound);
+        return Err(AppNotice::KeyfileKeyIdNotFound);
     }
 
     set_file_mac_in_place(&mut data, master_key)?;
@@ -93,8 +93,8 @@ pub fn remove_key(path: &Path, master_key: &[u8; 32], key_id: KeyId) -> AppResul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AppError;
     use crate::keyfile::ops::test_support::{mk_fixture, mk_fixture_one_key};
+    use crate::notices::AppNotice;
     use base64::engine::general_purpose;
     use zeroize::Zeroizing;
 
@@ -209,6 +209,6 @@ mod tests {
     fn remove_key_errors_if_missing() {
         let fx = mk_fixture("passphrase").unwrap();
         let err = remove_key(&fx.path, &fx.master_key, 999).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileKeyIdNotFound));
+        assert!(matches!(err, AppNotice::KeyfileKeyIdNotFound));
     }
 }

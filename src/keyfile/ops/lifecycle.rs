@@ -2,12 +2,12 @@
 
 use crate::{
     context::APP_ID,
-    error::{AppError, AppResult},
     keyfile::{
         crypto::*,
         fs::{read_json, write_json},
         types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION},
     },
+    notices::{AppNotice, AppResult},
 };
 
 use base64::{engine::general_purpose, Engine as _};
@@ -17,7 +17,7 @@ use std::path::Path;
 
 pub fn write_blank_keyfile(path: &Path) -> AppResult<()> {
     if path.exists() {
-        return Err(AppError::KeyfileAlreadyExists);
+        return Err(AppNotice::KeyfileAlreadyExists);
     }
 
     let mut salt = [0u8; 16];
@@ -39,10 +39,10 @@ pub fn read_master_key(path: &Path, passphrase: &str) -> AppResult<[u8; 32]> {
     let data = read_json(&path)?;
     let salt = general_purpose::STANDARD
         .decode(&data.salt)
-        .map_err(|e| AppError::InvalidCiphertextBase64(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     if salt.len() != 16 {
-        return Err(AppError::InvalidSaltLength { len: salt.len() });
+        return Err(AppNotice::InvalidSaltLength { len: salt.len() });
     }
 
     let mut salt_arr = [0u8; 16];
@@ -79,7 +79,7 @@ mod tests {
 
         // Second create should fail
         let err = write_blank_keyfile(&path).unwrap_err();
-        assert!(matches!(err, AppError::KeyfileAlreadyExists));
+        assert!(matches!(err, AppNotice::KeyfileAlreadyExists));
 
         // Shape sanity
         let data = fs::read_json(&path).unwrap();
@@ -119,7 +119,7 @@ mod tests {
         fs::write_json(&path, &data).unwrap();
 
         let err = read_master_key(&path, "passphrase").unwrap_err();
-        assert!(matches!(err, AppError::InvalidSaltLength { .. }));
+        assert!(matches!(err, AppNotice::InvalidSaltLength { .. }));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -5,7 +5,7 @@ use crate::ui::widgets;
 use super::Route;
 use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
-    command, context::AppCtx, error::AppError, keyfile_store::KeyfileStore, types::AppState,
+    command, context::AppCtx, keyfile_store::KeyfileStore, notices::AppNotice, types::AppState,
 };
 
 use super::message::PanelMsgState;
@@ -119,7 +119,7 @@ impl CreateKeyfilePanel {
                     // Do not leave a selected keyfile dir pointing at a failed create attempt.
                     ctx.set_selected_keyfile_dir(None);
 
-                    if matches!(e, AppError::KeyfileAlreadyExists) {
+                    if matches!(e, AppNotice::KeyfileAlreadyExists) {
                         self.msg.set_warn(
                             "A keyfile with that name already exists. Choose a different name.",
                         );

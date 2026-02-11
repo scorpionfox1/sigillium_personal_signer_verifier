@@ -28,6 +28,7 @@ pub struct WizardState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WizardStepPhase {
+    BundleAbout,
     About,
     Text,
     Translation,

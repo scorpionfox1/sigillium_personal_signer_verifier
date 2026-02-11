@@ -1,6 +1,6 @@
 // src/json_canon.rs
 
-use crate::error::{AppError, AppResult};
+use crate::notices::{AppNotice, AppResult};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 
@@ -17,7 +17,7 @@ pub fn hash_canonical_value(value: &Value) -> AppResult<[u8; 32]> {
 }
 
 pub fn hash_canonical_value_object(value: &Value) -> AppResult<[u8; 32]> {
-    let obj = value.as_object().ok_or(AppError::JsonNotObject)?;
+    let obj = value.as_object().ok_or(AppNotice::JsonNotObject)?;
     hash_canonical_value(&Value::Object(obj.clone()))
 }
 
@@ -38,7 +38,7 @@ fn write_canonical_value<W: Write>(w: &mut W, value: &Value) -> AppResult<()> {
         }
         Value::String(s) => {
             serde_json::to_writer(&mut *w, s)
-                .map_err(|e| AppError::JsonCanonicalize(e.to_string()))?;
+                .map_err(|e| AppNotice::JsonCanonicalize(e.to_string()))?;
         }
         Value::Array(arr) => {
             w.write_all(b"[")?;
@@ -65,7 +65,7 @@ fn write_canonical_value<W: Write>(w: &mut W, value: &Value) -> AppResult<()> {
                 first = false;
 
                 serde_json::to_writer(&mut *w, k)
-                    .map_err(|e| AppError::JsonCanonicalize(e.to_string()))?;
+                    .map_err(|e| AppNotice::JsonCanonicalize(e.to_string()))?;
                 w.write_all(b":")?;
                 write_canonical_value(w, &map[k])?;
             }
@@ -78,11 +78,11 @@ fn write_canonical_value<W: Write>(w: &mut W, value: &Value) -> AppResult<()> {
 pub fn canonical_value_string(value: &Value) -> AppResult<String> {
     let mut out: Vec<u8> = Vec::new();
     write_canonical_value(&mut out, value)?;
-    String::from_utf8(out).map_err(|_| AppError::JsonCanonicalize("canonical utf-8 failed".into()))
+    String::from_utf8(out).map_err(|_| AppNotice::JsonCanonicalize("canonical utf-8 failed".into()))
 }
 
 pub fn canonical_value_object_string(value: &Value) -> AppResult<String> {
-    let obj = value.as_object().ok_or(AppError::JsonNotObject)?;
+    let obj = value.as_object().ok_or(AppNotice::JsonNotObject)?;
     canonical_value_string(&Value::Object(obj.clone()))
 }
 
@@ -93,7 +93,7 @@ pub fn canonical_value_object_string(value: &Value) -> AppResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AppError;
+    use crate::notices::AppNotice;
     use serde_json::json;
 
     #[test]
@@ -153,6 +153,6 @@ mod tests {
     fn object_only_hash_rejects_non_object() {
         let v = json!([1, 2, 3]);
         let err = hash_canonical_value_object(&v).unwrap_err();
-        assert!(matches!(err, AppError::JsonNotObject));
+        assert!(matches!(err, AppNotice::JsonNotObject));
     }
 }

@@ -8,7 +8,7 @@ use super::Route;
 use eframe::egui;
 
 use sigillium_personal_signer_verifier_lib::{
-    command, context::AppCtx, error::AppError, types::AppState,
+    command, context::AppCtx, notices::AppNotice, types::AppState,
 };
 
 pub struct LockPanel {
@@ -77,14 +77,14 @@ impl LockPanel {
                     *route = return_route.take().unwrap_or(Route::Sign);
                 }
 
-                Err(AppError::KeyfileQuarantined { .. }) => {
+                Err(AppNotice::KeyfileQuarantined { .. }) => {
                     // Quarantine is surfaced on the Select Keyfile panel.
                     self.msg.clear();
                     *return_route = None;
                     *route = Route::KeyfileSelect;
                 }
 
-                Err(AppError::KeyfileMissing { .. }) => {
+                Err(AppNotice::KeyfileMissing { .. }) => {
                     self.msg.clear();
                     *return_route = None;
                     *route = Route::KeyfileSelect;

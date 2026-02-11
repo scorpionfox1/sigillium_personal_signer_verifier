@@ -140,6 +140,7 @@ mod tests {
             template: BundleTemplate {
                 template_id: None,
                 template_desc: None,
+                bundle_about: None,
                 docs: vec![],
             },
             docs,

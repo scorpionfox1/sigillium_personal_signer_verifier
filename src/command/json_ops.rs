@@ -1,7 +1,7 @@
 // src/command/json_ops.rs
 
-use crate::error::{AppError, AppResult};
 use crate::json_canon::hash_canonical_value_object;
+use crate::notices::{AppNotice, AppResult};
 
 use jsonschema::{Draft, JSONSchema};
 use serde_json::Value;
@@ -14,30 +14,30 @@ pub fn canonicalize_json_2020_12(json_text: &str, schema_text: &str) -> AppResul
     validate_json_2020_12(json_text, schema_text)?;
 
     let instance: Value =
-        serde_json::from_str(json_text).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+        serde_json::from_str(json_text).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
 
     hash_canonical_value_object(&instance)
 }
 
 pub fn validate_json_2020_12(json_text: &str, schema_text: &str) -> AppResult<()> {
     if json_text.len() > MAX_JSON_BYTES {
-        return Err(AppError::JsonTooLarge);
+        return Err(AppNotice::JsonTooLarge);
     }
     if schema_text.len() > MAX_SCHEMA_BYTES {
-        return Err(AppError::SchemaTooLarge);
+        return Err(AppNotice::SchemaTooLarge);
     }
 
     let instance: Value =
-        serde_json::from_str(json_text).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+        serde_json::from_str(json_text).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
 
     let schema_value: Value = serde_json::from_str(schema_text)
-        .map_err(|e| AppError::InvalidSchemaJson(e.to_string()))?;
+        .map_err(|e| AppNotice::InvalidSchemaJson(e.to_string()))?;
 
     if let Some(obj) = schema_value.as_object() {
         if let Some(v) = obj.get("$schema") {
             let s = v.as_str().unwrap_or("");
             if !s.contains("2020-12") {
-                return Err(AppError::SchemaWrongDraft);
+                return Err(AppNotice::SchemaWrongDraft);
             }
         }
     }
@@ -45,7 +45,7 @@ pub fn validate_json_2020_12(json_text: &str, schema_text: &str) -> AppResult<()
     let compiled = JSONSchema::options()
         .with_draft(Draft::Draft202012)
         .compile(&schema_value)
-        .map_err(|e| AppError::SchemaCompile(e.to_string()))?;
+        .map_err(|e| AppNotice::SchemaCompile(e.to_string()))?;
 
     let result = compiled.validate(&instance);
 
@@ -69,18 +69,18 @@ pub fn validate_json_2020_12(json_text: &str, schema_text: &str) -> AppResult<()
                 summary.push_str(&format!(" … (+{more} more)"));
             }
 
-            Err(AppError::SchemaValidation(summary))
+            Err(AppNotice::SchemaValidation(summary))
         }
     }
 }
 
 pub fn canonicalize_json(json_text: &str) -> AppResult<[u8; 32]> {
     if json_text.len() > MAX_JSON_BYTES {
-        return Err(AppError::JsonTooLarge);
+        return Err(AppNotice::JsonTooLarge);
     }
 
     let instance: Value =
-        serde_json::from_str(json_text).map_err(|e| AppError::InvalidJson(e.to_string()))?;
+        serde_json::from_str(json_text).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
 
     hash_canonical_value_object(&instance)
 }
@@ -92,7 +92,7 @@ pub fn canonicalize_json(json_text: &str) -> AppResult<[u8; 32]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AppError;
+    use crate::notices::AppNotice;
 
     const SCHEMA_2020_12: &str = r#"{
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -118,7 +118,7 @@ mod tests {
         let json_bad = r#"{"name":"Alice","active":true}"#;
 
         match validate_json_2020_12(json_bad, SCHEMA_2020_12) {
-            Err(AppError::SchemaValidation(_)) => {}
+            Err(AppNotice::SchemaValidation(_)) => {}
             other => panic!("expected SchemaValidation(_), got: {:?}", other),
         }
     }
@@ -140,7 +140,7 @@ mod tests {
         }"#;
 
         match validate_json_2020_12(json_ok, schema_wrong) {
-            Err(AppError::SchemaWrongDraft) => {}
+            Err(AppNotice::SchemaWrongDraft) => {}
             other => panic!("expected SchemaWrongDraft, got: {:?}", other),
         }
     }
@@ -149,7 +149,7 @@ mod tests {
     fn validate_json_2020_12_rejects_invalid_json() {
         let json_bad = r#"{"name":"Alice""#; // broken JSON
         match validate_json_2020_12(json_bad, SCHEMA_2020_12) {
-            Err(AppError::InvalidJson(_)) => {}
+            Err(AppNotice::InvalidJson(_)) => {}
             other => panic!("expected InvalidJson(_), got: {:?}", other),
         }
     }
@@ -159,7 +159,7 @@ mod tests {
         let json_ok = r#"{"name":"Alice","age":30,"active":true}"#;
         let schema_bad = r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","#; // broken JSON
         match validate_json_2020_12(json_ok, schema_bad) {
-            Err(AppError::InvalidSchemaJson(_)) => {}
+            Err(AppNotice::InvalidSchemaJson(_)) => {}
             other => panic!("expected InvalidSchemaJson(_), got: {:?}", other),
         }
     }
@@ -168,14 +168,14 @@ mod tests {
     fn validate_json_2020_12_enforces_json_and_schema_size_limits() {
         let too_big_json = "x".repeat(MAX_JSON_BYTES + 1);
         match validate_json_2020_12(&too_big_json, SCHEMA_2020_12) {
-            Err(AppError::JsonTooLarge) => {}
+            Err(AppNotice::JsonTooLarge) => {}
             other => panic!("expected JsonTooLarge, got: {:?}", other),
         }
 
         let json_ok = r#"{"name":"Alice","age":30,"active":true}"#;
         let too_big_schema = "x".repeat(MAX_SCHEMA_BYTES + 1);
         match validate_json_2020_12(json_ok, &too_big_schema) {
-            Err(AppError::SchemaTooLarge) => {}
+            Err(AppNotice::SchemaTooLarge) => {}
             other => panic!("expected SchemaTooLarge, got: {:?}", other),
         }
     }

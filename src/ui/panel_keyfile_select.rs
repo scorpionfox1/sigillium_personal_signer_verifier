@@ -6,8 +6,8 @@ use eframe::egui;
 use sigillium_personal_signer_verifier_lib::{
     command::session::select_keyfile_dir,
     context::AppCtx,
-    error::AppError,
     keyfile_store::{KeyfileDirRow, KeyfileStore},
+    notices::AppNotice,
     types::AppState,
 };
 
@@ -142,13 +142,13 @@ impl KeyfileSelectPanel {
                                         *return_route = Some(Route::Sign);
                                         *route = Route::Locked;
                                     }
-                                    Err(AppError::KeyfileQuarantined { dir_name }) => {
+                                    Err(AppNotice::KeyfileQuarantined { dir_name }) => {
                                         self.set_quarantined_message(&dir_name);
                                         self.selected = None;
                                         self.refresh_on_enter(ctx);
                                         *route = Route::KeyfileSelect;
                                     }
-                                    Err(AppError::KeyfileMissing { .. }) => {
+                                    Err(AppNotice::KeyfileMissing { .. }) => {
                                         self.msg.set_warn(
                                             "Selected keyfile is missing. Choose another.",
                                         );
