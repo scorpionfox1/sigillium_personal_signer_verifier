@@ -340,14 +340,12 @@ impl DocumentWizardPanel {
                     return;
                 };
 
-                markdown_preview = Some(("About Document Bundle".to_string(), about.to_string()));
+                markdown_preview = Some(("About Bundle".to_string(), about.to_string()));
 
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
-                    "About Document Bundle",
-                    "This section contains context information about the entire document bundle. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
-
- i.e. only the document text itself is canonical.",
+                    "About Bundle",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle of one or more documents you are about to read and ultimately sign.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -365,9 +363,7 @@ impl DocumentWizardPanel {
                 ui_doc_screen_skeleton_notice_above_header(
                     ui,
                     "About Document",
-                    "This section contains context information about the document you are about to read. It is provided to help orient you, but understand it is not signed. Only the actual document text is hashed and signed.
-
- i.e. only the document text itself is canonical.",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the single document you are about to read and ultimately sign.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -739,9 +735,7 @@ fn ui_section_translation(
     };
 
     let header = format!("{} (translation)", doc_label);
-    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "This translation is provided as a convenience, but only the actual document text is signed and is therefore canonical.
-
-Please confirm the translation yourself or rely on someone you trust who has already done so.", |ui| {
+    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "THIS SECTION IS NOT SIGNED. It is a translation of the text of the preceding section provided for convenience, but since it is not signed it is not authoritative. Please confirm the translation at will.", |ui| {
         ui.label(format!("Language: {}", t.lang));
         ui.add_space(6.0);
 

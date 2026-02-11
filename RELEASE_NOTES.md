@@ -1,3 +1,44 @@
+## Release v0.7.2
+
+### Notes
+
+This release focuses on **Document Wizard readability and review ergonomics**, plus a new in-app **About panel** and a more consistent **notice/messaging model**.
+
+---
+
+### Notable Changes
+
+#### Document Wizard: bundle-level context + browser preview
+
+- Added optional template field `bundle_about` so a wizard can show a bundle-level introduction before the first document.
+- Added a new **Bundle About** step in wizard flow and navigation so users can move into document review from bundle context cleanly.
+- Added **View in Browser** for wizard text/about/translation views, rendering markdown-like content to temporary HTML and opening it with the system browser.
+- Added **raw document text export** from the Review & Build screen (per-document save to `.txt`) to support external review and archival workflows.
+
+#### Document Wizard review UX improvements
+
+- Review screen hash pane is now wider and labeled as **Document hashes & raw text**.
+- Hash entries now use cleaner bullet-style document labels with direct “raw text” actions.
+- Copy interactions in review/build use the shared clipboard notice flow for consistent feedback.
+
+#### New About panel
+
+- Added a dedicated **About** tab in left navigation.
+- About panel loads `README.md` in-app and supports opening a browser preview for easier reading.
+
+#### Messaging and internal consistency
+
+- Renamed the core error type from `AppError` to `AppNotice` and standardized command/UI plumbing on “notice” semantics.
+- Clipboard copy feedback is now represented with a dedicated `StringCopied` notice and shown consistently across panels.
+- `PlatformHardeningFailed` remains informational and is surfaced with clearer user-facing guidance.
+
+#### Templates and docs
+
+- Document Wizard template spec now documents both `bundle_about` and `doc_about` as UI-only, not signed.
+- Sample templates were updated to include bundle-level About examples.
+
+---
+
 ## Release v0.7.1
 
 ### Notes

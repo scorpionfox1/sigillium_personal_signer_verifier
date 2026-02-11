@@ -213,12 +213,6 @@ fn ui_notice_inner(ui: &mut egui::Ui, body: &str) {
         .fill(fill)
         .corner_radius(egui::CornerRadius::same(8))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new("Notice")
-                    .size(18.0)
-                    .strong()
-                    .color(accent),
-            );
             ui.add_space(4.0);
             ui.label(body);
         });

@@ -182,12 +182,16 @@ The application includes a **Document Wizard** as a convenience feature layered 
 The wizard allows users to load a JSON5 document template and step through a readable review-and-input flow, producing a document bundle according to Sigillium’s document conventions. At the end of the wizard flow, once a document bundle is created, a shortcut action navigates to the signing panel and automatically loads the bundle into the signing message field.
 
 The wizard:
+- optionally displays a bundle-level **About** screen before the first document (`bundle_about`, informational only; not signed),
 - renders human-readable document text,
-- optionally displays a document-specific **About** screen prior to section review (informational only; not signed),
-- gathers and validates user input, and
+- optionally displays a document-specific **About** screen prior to section review (`doc_about`, informational only; not signed),
+- gathers and validates user input,
+- supports opening bundle/about/section text in a browser preview for easier reading, and
 - emits a structured JSON message intended to be signed by the core signing engine.
 
 The emitted JSON message may contain **signing-time tags**, which are resolved by the signing panel immediately prior to signature generation.
+
+During review/build, the wizard also supports exporting each document's canonical raw text to a local `.txt` file for archival or external review.
 
 The Document Wizard does **not** perform cryptographic signing and does **not** define canonical meaning. Canonical meaning is established only by the message ultimately signed by the signing engine.
 
