@@ -48,6 +48,7 @@ pub enum HashAlgo {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SectionTemplate {
+    #[serde(default)]
     pub section_id: String,
     pub title: Option<String>,
     pub text: String,
@@ -169,11 +170,7 @@ pub fn validate_template(tpl: &BundleTemplate) -> Result<(), TemplateLoadError> 
                 "docs[{i}].doc_identity.ver must be non-empty"
             )));
         }
-        let id_ver = format!(
-            "{}{}",
-            d.doc_identity.id.trim(),
-            d.doc_identity.ver.trim()
-        );
+        let id_ver = format!("{}{}", d.doc_identity.id.trim(), d.doc_identity.ver.trim());
         if !doc_id_vers.insert(id_ver) {
             return Err(TemplateLoadError::Validation(format!(
                 "docs[{i}].doc_identity.id + ver must be unique; duplicate found for id '{}' ver '{}'",
@@ -188,11 +185,6 @@ pub fn validate_template(tpl: &BundleTemplate) -> Result<(), TemplateLoadError> 
         }
 
         for (j, s) in d.sections.iter().enumerate() {
-            if s.section_id.trim().is_empty() {
-                return Err(TemplateLoadError::Validation(format!(
-                    "docs[{i}].sections[{j}].section_id must be non-empty"
-                )));
-            }
             if s.text.trim().is_empty() {
                 return Err(TemplateLoadError::Validation(format!(
                     "docs[{i}].sections[{j}].text must be non-empty"
@@ -265,6 +257,26 @@ mod tests {
         let tpl = parse_template_str(s).expect("parse ok");
         assert_eq!(tpl.docs.len(), 1);
         assert_eq!(tpl.docs[0].sections.len(), 1);
+    }
+
+    #[test]
+    fn parses_template_when_section_id_is_missing() {
+        let s = r#"
+        {
+          docs: [
+            {
+              doc_identity: { id: "d1", label: "Doc 1", ver: "v1.0" },
+              doc_hash: { algo: "sha256", hash: "00" },
+              sections: [
+                { text: "Hello." }
+              ]
+            }
+          ]
+        }
+        "#;
+
+        let tpl = parse_template_str(s).expect("parse ok");
+        assert_eq!(tpl.docs[0].sections[0].section_id, "");
     }
 
     #[test]

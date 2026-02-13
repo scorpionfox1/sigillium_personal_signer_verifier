@@ -31,7 +31,6 @@ pub enum WizardStepPhase {
     BundleAbout,
     About,
     Text,
-    Translation,
     Inputs,
 }
 
