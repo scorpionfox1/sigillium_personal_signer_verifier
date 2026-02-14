@@ -237,8 +237,16 @@ impl eframe::App for UiApp {
             self.last_activity = Instant::now();
         }
 
+        let lock_timeout_suspended = self
+            .state
+            .lock_timeout_suspended
+            .lock()
+            .map(|g| *g)
+            .unwrap_or(false);
+
         if rctx.unlocked
             && self.route != Route::Locked
+            && !lock_timeout_suspended
             && self.last_activity.elapsed() >= Duration::from_secs(60)
         {
             *&mut self.route = Route::Locked;

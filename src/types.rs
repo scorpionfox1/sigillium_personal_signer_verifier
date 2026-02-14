@@ -63,6 +63,7 @@ pub struct AppState {
     pub sign_verify_mode: std::sync::Mutex<SignVerifyMode>,
     pub sign_output_mode: std::sync::Mutex<SignOutputMode>,
     pub sign_resolve_tag_mode: std::sync::Mutex<bool>,
+    pub lock_timeout_suspended: std::sync::Mutex<bool>,
 
     // persistent + in-memory security event log
     pub security_log: std::sync::Mutex<SecurityLog>,

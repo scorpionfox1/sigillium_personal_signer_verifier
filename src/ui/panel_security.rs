@@ -13,6 +13,7 @@ enum SecurityTab {
     SecurityLog,
     ChangePassphrase,
     SelfDestruct,
+    SecurityOptions,
 }
 
 pub struct SecurityPanel {
@@ -28,6 +29,7 @@ pub struct SecurityPanel {
 
     confirm_phrase: String,
     confirm_self_destruct: bool,
+    suspend_lock_timeout: bool,
 }
 
 impl SecurityPanel {
@@ -42,6 +44,7 @@ impl SecurityPanel {
             msg: PanelMsgState::default(),
             confirm_phrase: String::new(),
             confirm_self_destruct: false,
+            suspend_lock_timeout: false,
         }
     }
 
@@ -74,6 +77,11 @@ impl SecurityPanel {
                         "Change Passphrase",
                     );
                     ui.selectable_value(&mut self.tab, SecurityTab::SelfDestruct, "Self-Destruct");
+                    ui.selectable_value(
+                        &mut self.tab,
+                        SecurityTab::SecurityOptions,
+                        "Security Options",
+                    );
                 });
 
                 if self.tab != prev_tab {
@@ -81,6 +89,14 @@ impl SecurityPanel {
 
                     if self.tab == SecurityTab::SecurityLog {
                         self.security_log_rendered = render_events(read_events(state));
+                    }
+
+                    if self.tab == SecurityTab::SecurityOptions {
+                        self.suspend_lock_timeout = state
+                            .lock_timeout_suspended
+                            .lock()
+                            .map(|g| *g)
+                            .unwrap_or(false);
                     }
                 }
 
@@ -92,6 +108,7 @@ impl SecurityPanel {
                         self.ui_change_passphrase(ui, state, ctx, route)
                     }
                     SecurityTab::SelfDestruct => self.ui_self_destruct(ui, ctx, route),
+                    SecurityTab::SecurityOptions => self.ui_security_options(ui, state),
                 }
             });
     }
@@ -189,6 +206,49 @@ impl SecurityPanel {
             }
         });
 
+        self.msg.show(ui);
+    }
+
+    fn ui_security_options(&mut self, ui: &mut egui::Ui, state: &AppState) {
+        widgets::section_header(ui, "Session lock timeout");
+        ui.add_space(6.0);
+
+        ui.weak("When enabled, the app will not auto-lock after 60 seconds of inactivity.");
+        ui.weak("Disable this option to re-engage inactivity auto-lock.");
+
+        ui.add_space(10.0);
+
+        let changed = ui
+            .checkbox(
+                &mut self.suspend_lock_timeout,
+                "Suspend lock timeout (until you turn this off)",
+            )
+            .changed();
+
+        if changed {
+            if let Ok(mut guard) = state.lock_timeout_suspended.lock() {
+                *guard = self.suspend_lock_timeout;
+                self.msg.clear();
+                if !self.suspend_lock_timeout {
+                    self.msg
+                        .set_success("Lock timeout re-engaged. Auto-lock is active.");
+                }
+            } else {
+                self.msg
+                    .set_error("Unable to update lock timeout setting due to state lock failure.");
+            }
+        }
+
+        if self.suspend_lock_timeout {
+            ui.add_space(8.0);
+            widgets::ui_notice(
+                ui,
+                "Warning: lock timeout is currently suspended. This session will stay unlocked until you manually lock it or turn this option off.",
+                widgets::NoticeAlign::Left,
+            );
+        }
+
+        ui.add_space(10.0);
         self.msg.show(ui);
     }
 

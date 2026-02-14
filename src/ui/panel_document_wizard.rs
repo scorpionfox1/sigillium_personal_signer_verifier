@@ -101,37 +101,6 @@ impl DocumentWizardPanel {
             .show(ui, |ui| {
                 self.ui_template_picker(ui);
 
-                if let Some(wiz) = self.wizard.as_ref() {
-                    let doc_count = wiz.docs.len();
-                    let doc_index = wiz.doc_index;
-                    let section_count = wiz
-                        .docs
-                        .get(doc_index)
-                        .map(|d| d.sections.len())
-                        .unwrap_or(0);
-
-                    let label = if matches!(self.mode, WizardPanelMode::ReviewBuild)
-                        || matches!(self.phase, WizardStepPhase::BundleAbout)
-                    {
-                        format!("Doc 0 of {}", doc_count.max(1))
-                    } else {
-                        let section_num = match self.phase {
-                            WizardStepPhase::About => 0,
-                            _ => self.section_index.saturating_add(1),
-                        };
-                        format!(
-                            "Doc {} of {} — Section {} of {}",
-                            doc_index.saturating_add(1),
-                            doc_count.max(1),
-                            section_num,
-                            section_count,
-                        )
-                    };
-
-                    ui.label(label);
-                    ui.add_space(6.0);
-                }
-
                 ui.add_space(6.0);
                 self.msg.show(ui);
                 ui.add_space(6.0);
@@ -336,6 +305,21 @@ impl DocumentWizardPanel {
 
         let mut markdown_preview: Option<(String, String)> = None;
 
+        let section_num = match *phase {
+            WizardStepPhase::BundleAbout | WizardStepPhase::About => 0,
+            _ => section_index.saturating_add(1),
+        };
+        let counter_label = format!(
+            "Section {} of {} — Document {} of {}",
+            section_num,
+            section_count,
+            doc_index.saturating_add(1),
+            wiz.docs.len().max(1),
+        );
+
+        ui.label(counter_label);
+        ui.add_space(6.0);
+
         // Centerpiece: section text / translation / inputs.
         match *phase {
             WizardStepPhase::BundleAbout => {
@@ -353,7 +337,7 @@ impl DocumentWizardPanel {
                 ui_doc_screen_skeleton_notice_below_body(
                     ui,
                     "About Bundle",
-                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle of one or more documents you are about to read and ultimately sign.",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle (the collection of 1 or more of documents) you are about to read.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -371,7 +355,7 @@ impl DocumentWizardPanel {
                 ui_doc_screen_skeleton_notice_below_body(
                     ui,
                     "About Document",
-                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the single document you are about to read and ultimately sign.",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information for a document.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -429,7 +413,7 @@ impl DocumentWizardPanel {
             ui.horizontal(|ui| {
                 // Back on the left.
                 let back_btn =
-                    widgets::large_button("← Back").min_size(egui::vec2(back_w, button_height));
+                    widgets::large_button("<< Back").min_size(egui::vec2(back_w, button_height));
 
                 if ui.add_enabled(can_back, back_btn).clicked() {
                     if let Err(e) = step_back(wiz, section_index, phase) {
@@ -482,8 +466,8 @@ impl DocumentWizardPanel {
 
                 // Next on the right, same baseline and height.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let next_btn =
-                        widgets::large_button("Next →").min_size(egui::vec2(next_w, button_height));
+                    let next_btn = widgets::large_button("Next >>")
+                        .min_size(egui::vec2(next_w, button_height));
 
                     if ui.add_enabled(can_next, next_btn).clicked() {
                         if *phase == WizardStepPhase::Inputs {
@@ -771,7 +755,7 @@ fn ui_section_text(
         };
 
         let header = format!("{} (translation)", doc_label);
-        ui_doc_screen_skeleton_notice_below_body(ui, header.as_str(), "THIS SECTION IS NOT SIGNED. It is a translation of the text of the preceding section provided for convenience, but since it is not signed it is not authoritative. Please confirm the translation at will.", |ui| {
+        ui_doc_screen_skeleton_notice_below_body(ui, header.as_str(), "THIS SECTION WILL NOT BE SIGNED. It is a translation of the document section text provided for convenience. Please confirm the translation for yourself.", |ui| {
             ui.label(format!("Language: {}", t.lang));
             ui.add_space(6.0);
 
