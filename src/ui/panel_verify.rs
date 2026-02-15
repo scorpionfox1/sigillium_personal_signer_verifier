@@ -260,6 +260,21 @@ impl VerifyPanel {
                             .map(|g| *g)
                             .unwrap_or(SignVerifyMode::Text);
 
+                        let message = if mode == SignVerifyMode::Json {
+                            match command::json_ops::format_json_human_readable(message) {
+                                Ok(formatted) => {
+                                    self.message = formatted;
+                                    self.message.trim()
+                                }
+                                Err(e) => {
+                                    self.msg.from_app_error(&e);
+                                    return;
+                                }
+                            }
+                        } else {
+                            message
+                        };
+
                         match command::verify_message(pk_hex, message, sig_b64, mode, None) {
                             Ok(true) => self.msg.set_info("Valid signature."),
                             Ok(false) => self.msg.set_info("Invalid signature."),

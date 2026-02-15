@@ -309,11 +309,16 @@ impl DocumentWizardPanel {
             WizardStepPhase::BundleAbout | WizardStepPhase::About => 0,
             _ => section_index.saturating_add(1),
         };
+        let document_num = match *phase {
+            WizardStepPhase::BundleAbout => 0,
+            _ => doc_index.saturating_add(1),
+        };
+
         let counter_label = format!(
             "Section {} of {} — Document {} of {}",
             section_num,
             section_count,
-            doc_index.saturating_add(1),
+            document_num,
             wiz.docs.len().max(1),
         );
 

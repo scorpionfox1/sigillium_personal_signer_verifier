@@ -19,6 +19,20 @@ pub fn canonicalize_json_2020_12(json_text: &str, schema_text: &str) -> AppResul
     hash_canonical_value_object(&instance)
 }
 
+pub fn format_json_human_readable(json_text: &str) -> AppResult<String> {
+    let value: Value =
+        serde_json::from_str(json_text).map_err(|e| AppNotice::InvalidJson(e.to_string()))?;
+    serde_json::to_string_pretty(&value)
+        .map_err(|e| AppNotice::JsonCanonicalize(format!("pretty json failed: {e}")))
+}
+
+pub fn format_schema_json_human_readable(schema_text: &str) -> AppResult<String> {
+    let value: Value = serde_json::from_str(schema_text)
+        .map_err(|e| AppNotice::InvalidSchemaJson(e.to_string()))?;
+    serde_json::to_string_pretty(&value)
+        .map_err(|e| AppNotice::JsonCanonicalize(format!("pretty schema json failed: {e}")))
+}
+
 pub fn validate_json_2020_12(json_text: &str, schema_text: &str) -> AppResult<()> {
     if json_text.len() > MAX_JSON_BYTES {
         return Err(AppNotice::JsonTooLarge);
@@ -200,5 +214,24 @@ mod tests {
             canonicalize_json_2020_12(json, SCHEMA_2020_12).expect("canonicalize_json_2020_12");
 
         assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn format_json_human_readable_is_pretty_and_stable() {
+        let formatted =
+            format_json_human_readable(r#"{ "z": 1, "a": { "y": 2, "x": 3 } }"#).expect("format");
+        assert!(formatted.contains('\n'));
+        let reparsed: Value = serde_json::from_str(&formatted).expect("reparse");
+        let expected: Value = serde_json::from_str(r#"{"z":1,"a":{"y":2,"x":3}}"#).unwrap();
+        assert_eq!(reparsed, expected);
+    }
+
+    #[test]
+    fn format_schema_json_human_readable_surfaces_schema_json_errors() {
+        let err = format_schema_json_human_readable("{ \"$schema\":").expect_err("expected err");
+        match err {
+            AppNotice::InvalidSchemaJson(_) => {}
+            other => panic!("expected InvalidSchemaJson(_), got: {other:?}"),
+        }
     }
 }

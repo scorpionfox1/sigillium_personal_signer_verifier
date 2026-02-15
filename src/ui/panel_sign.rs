@@ -252,6 +252,39 @@ r#"{
                             }
                         }
 
+                        if sign_mode == SignVerifyMode::Json {
+                            match command::json_ops::format_json_human_readable(self.message.trim()) {
+                                Ok(formatted) => self.message = formatted,
+                                Err(e) => {
+                                    self.msg.from_app_error(&e);
+                                    self.output_text.clear();
+                                    return;
+                                }
+                            }
+                        }
+
+                        if sign_mode == SignVerifyMode::Json && !self.schema.trim().is_empty() {
+                            match command::json_ops::format_schema_json_human_readable(self.schema.trim()) {
+                                Ok(formatted) => self.schema = formatted,
+                                Err(e) => {
+                                    self.msg.from_app_error(&e);
+                                    self.output_text.clear();
+                                    return;
+                                }
+                            }
+                        }
+
+                        if output_mode == SignOutputMode::Record && !self.record_config.trim().is_empty() {
+                            match command::json_ops::format_json_human_readable(self.record_config.trim()) {
+                                Ok(formatted) => self.record_config = formatted,
+                                Err(e) => {
+                                    self.msg.from_app_error(&e);
+                                    self.output_text.clear();
+                                    return;
+                                }
+                            }
+                        }
+
                         let schema_opt = if sign_mode == SignVerifyMode::Json {
                             let s = self.schema.trim();
                             if s.is_empty() {
@@ -282,7 +315,12 @@ r#"{
                             config_opt,
                         ) {
                             Ok(out) => {
-                                self.output_text = out;
+                                if output_mode == SignOutputMode::Record {
+                                    self.output_text = command::json_ops::format_json_human_readable(&out)
+                                        .unwrap_or(out);
+                                } else {
+                                    self.output_text = out;
+                                }
                                 self.msg.set_success("Signed.");
                             }
                             Err(e) => {
