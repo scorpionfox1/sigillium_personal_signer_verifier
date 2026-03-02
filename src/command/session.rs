@@ -24,7 +24,7 @@ pub fn select_active_key(key_id: KeyId, state: &AppState, ctx: &AppCtx) -> AppRe
         keyfile::decrypt_key_material(&keyfile_path, &*mk, key_id)
     });
 
-    let (privk, associated_s) = match key_res {
+    let (privk_opt, associated_s) = match key_res {
         Ok(k) => k,
         Err(e) => match e {
             AppNotice::KeyfileMacInvalid
@@ -51,7 +51,7 @@ pub fn select_active_key(key_id: KeyId, state: &AppState, ctx: &AppCtx) -> AppRe
                 lock_secrets(state).map_err(|_| AppNotice::InternalStateLockFailed)?;
             let secrets = secrets_guard.as_mut().ok_or(AppNotice::AppLocked)?;
 
-            secrets.active_private = Some(Zeroizing::new(privk));
+            secrets.active_private = privk_opt.map(Zeroizing::new);
 
             secrets
                 .active_private

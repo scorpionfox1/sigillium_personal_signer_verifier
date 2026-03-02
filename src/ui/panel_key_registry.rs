@@ -8,14 +8,22 @@ use sigillium_personal_signer_verifier_lib::{
 use super::Route;
 use super::{message::PanelMsgState, widgets};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InstallKeyType {
+    SignVerify,
+    VerifyOnly,
+}
+
 pub struct KeyRegistryPanel {
     mnemonic: String,
+    public_key_hex: String,
     domain: String,
     label: String,
     associated_key_id: String,
 
     // Install-time option
     enforce_standard_domain: bool,
+    install_key_type: InstallKeyType,
 
     msg: PanelMsgState,
 
@@ -27,10 +35,12 @@ impl KeyRegistryPanel {
     pub fn new() -> Self {
         Self {
             mnemonic: String::new(),
+            public_key_hex: String::new(),
             domain: String::new(),
             label: String::new(),
             associated_key_id: String::new(),
             enforce_standard_domain: true,
+            install_key_type: InstallKeyType::SignVerify,
             msg: PanelMsgState::default(),
             confirm_uninstall: false,
         }
@@ -43,9 +53,11 @@ impl KeyRegistryPanel {
     pub fn reset_inputs(&mut self) {
         self.mnemonic.clear();
         self.domain.clear();
+        self.public_key_hex.clear();
         self.label.clear();
         self.associated_key_id.clear();
         self.enforce_standard_domain = true;
+        self.install_key_type = InstallKeyType::SignVerify;
         self.confirm_uninstall = false;
     }
 
@@ -164,12 +176,37 @@ impl KeyRegistryPanel {
 
                         ui.add_space(6.0);
 
-                        ui.label("Mnemonic");
-                        ui.add(
-                            egui::TextEdit::multiline(&mut self.mnemonic)
-                                .desired_rows(3)
-                                .desired_width(dialog_width),
-                        );
+                        ui.label("Key type");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(
+                                &mut self.install_key_type,
+                                InstallKeyType::SignVerify,
+                                "Sign / Verify",
+                            );
+                            ui.radio_value(
+                                &mut self.install_key_type,
+                                InstallKeyType::VerifyOnly,
+                                "Verify only",
+                            );
+                        });
+
+                        ui.add_space(6.0);
+
+                        if self.install_key_type == InstallKeyType::SignVerify {
+                            ui.label("Mnemonic");
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.mnemonic)
+                                    .desired_rows(3)
+                                    .desired_width(dialog_width),
+                            );
+                        } else {
+                            ui.label("Public key (hex)");
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.public_key_hex)
+                                    .desired_rows(3)
+                                    .desired_width(dialog_width),
+                            );
+                        }
 
                         ui.add_space(6.0);
 
@@ -206,8 +243,11 @@ impl KeyRegistryPanel {
 
                         ui.add_space(8.0);
 
-                        let can_install =
-                            !self.mnemonic.trim().is_empty() && !self.label.trim().is_empty();
+                        let can_install = !self.label.trim().is_empty()
+                            && match self.install_key_type {
+                                InstallKeyType::SignVerify => !self.mnemonic.trim().is_empty(),
+                                InstallKeyType::VerifyOnly => !self.public_key_hex.trim().is_empty(),
+                            };
 
                         ui.horizontal(|ui| {
                             if ui
@@ -219,23 +259,31 @@ impl KeyRegistryPanel {
                             {
                                 self.clear_messages();
 
-                                // We still trim label/mnemonic for basic UX; domain behavior is controlled by the checkbox.
-                                let mnemonic = self.mnemonic.trim();
                                 let label = self.label.trim();
 
                                 let assoc = self.associated_key_id.trim();
                                 let assoc_opt = if assoc.is_empty() { None } else { Some(assoc) };
 
-                                // IMPORTANT: pass domain exactly as entered; command decides whether to normalize/validate.
-                                let res = command::install_key(
-                                    mnemonic,
-                                    &self.domain,
-                                    label,
-                                    assoc_opt,
-                                    self.enforce_standard_domain,
-                                    state,
-                                    ctx,
-                                );
+                                let res = match self.install_key_type {
+                                    InstallKeyType::SignVerify => command::install_key(
+                                        self.mnemonic.trim(),
+                                        &self.domain,
+                                        label,
+                                        assoc_opt,
+                                        self.enforce_standard_domain,
+                                        state,
+                                        ctx,
+                                    ),
+                                    InstallKeyType::VerifyOnly => command::install_verify_only_key(
+                                        self.public_key_hex.trim(),
+                                        &self.domain,
+                                        label,
+                                        assoc_opt,
+                                        self.enforce_standard_domain,
+                                        state,
+                                        ctx,
+                                    ),
+                                };
 
                                 if res.is_err() {
                                     *route = Route::KeyfileSelect;
@@ -245,10 +293,12 @@ impl KeyRegistryPanel {
                                     Ok(()) => {
                                         self.msg.set_success("Key installed");
                                         self.mnemonic.clear();
+                                        self.public_key_hex.clear();
                                         self.domain.clear();
                                         self.label.clear();
                                         self.associated_key_id.clear();
                                         self.enforce_standard_domain = true;
+                                        self.install_key_type = InstallKeyType::SignVerify;
                                     }
                                     Err(e) => {
                                         if let AppNotice::KeyfileQuarantined { .. } = e {

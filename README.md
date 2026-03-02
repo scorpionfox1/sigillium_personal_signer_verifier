@@ -76,8 +76,57 @@ Private keys are stored encrypted at rest.
 
 ### Key installation
 
-Keys are currently installed from a **BIP39 mnemonic** plus domain.  
-Importing raw private keys may be added in the future but is not part of v1.
+Keys can be installed as:
+
+- **Sign / Verify key**: from a **BIP39 mnemonic** plus domain, or
+- **Verify-only key**: from a **public key hex** plus optional metadata (no private key material stored).
+
+This supports workflows where operators need to verify signatures from third-party keys without importing signing secrets.
+
+If a **verify-only** key is selected as active, signing operations are blocked with an explicit "no signing key available" notice, while verification continues to work normally.
+
+### Functional difference: Sign/Verify vs Verify-only keys
+
+The two key types are intentionally different in behavior, not just in storage format:
+
+- **Sign / Verify key**
+  - Contains encrypted private key material.
+  - Can be selected and used for both signing and verification operations.
+  - Supports full signer workflows (raw signatures and signature records).
+
+- **Verify-only key**
+  - Contains no private key material.
+  - Can be selected and used as the active key for verification workflows.
+  - Cannot sign; signing attempts fail fast with a dedicated user-facing notice.
+
+In practice, this allows one key registry to hold both local signing identities and external/public verification identities, while preserving explicit operator feedback when a key lacks signing capability.
+
+### Domain standardization security option
+
+At key install time, the UI includes **Enforce standardized domain (recommended)**.
+
+- When enabled, the domain is normalized/validated to a constrained ASCII-safe form before key derivation and storage.
+- When disabled, the exact user-entered domain string is used as-is.
+
+Because the domain participates in key derivation, this option is security-relevant: accidental domain spelling/encoding drift can produce a different key than expected. The standardized mode reduces that risk for routine workflows.
+
+---
+
+
+## Keyfile format compatibility
+
+The keyfile includes explicit compatibility markers:
+
+- `version` — keyfile schema version
+- `format` — keyfile format marker
+- `app` — application marker
+
+Current reader behavior accepts versions in a supported range (`KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION`) and rejects versions outside that range (both too old and too new).
+
+This is intended to support future post-1.0 compatibility policy where newer releases can continue reading older keyfile versions while still rejecting unknown future versions.
+
+Key entries now also carry an explicit key type marker (`sign_verify` or `verify_only`).
+`sign_verify` entries contain encrypted private key material; `verify_only` entries intentionally do not.
 
 ---
 
@@ -90,6 +139,12 @@ A message is the byte sequence presented to the signing engine, regardless of ho
 
 - **Text mode**: signs/verifies the raw message bytes.
 - **JSON mode**: signs/verifies a deterministic canonical form of JSON.
+
+### Key capability behavior during sign/verify
+
+- Signing requires an active key with private material (`sign_verify`).
+- If the active key is `verify_only`, signing is rejected with an explicit notice (`NoSigningKeyAvailable`).
+- Verification remains available with either key type because only public key material is required.
 
 ### Signing output modes
 

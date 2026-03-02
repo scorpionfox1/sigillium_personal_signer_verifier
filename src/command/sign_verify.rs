@@ -57,7 +57,13 @@ pub fn sign_message(
     let sig = crate::command_state::with_active_private(state, |privk| {
         Ok(crypto::sign_message(&*privk, &to_sign))
     })
-    .map_err(AppNotice::Msg)?;
+    .map_err(|e| {
+        if e == AppNotice::NoActiveKeySelected.to_string() {
+            AppNotice::NoSigningKeyAvailable
+        } else {
+            AppNotice::Msg(e)
+        }
+    })?;
 
     let sig_base64 = STANDARD.encode(&sig);
 
@@ -287,6 +293,7 @@ mod tests {
                 id: 1,
                 domain: "example.com".to_string(),
                 public_key: pubk,
+                key_type: crate::keyfile::KeyType::SignVerify,
                 label: Zeroizing::new("test-key".to_string()),
             });
         }
@@ -332,7 +339,7 @@ mod tests {
             other => panic!("expected AppNotice::Msg(AppLocked), got {other:?}"),
         }
 
-        // Unlocked but no active private => NoActiveKeySelected
+        // Unlocked but no active private => NoSigningKeyAvailable
         {
             let mut s = state.session.lock().unwrap();
             s.unlocked = true;
@@ -348,8 +355,8 @@ mod tests {
 
         let err = sign_message("hi", SignVerifyMode::Text, None, &state, None).unwrap_err();
         match err {
-            AppNotice::Msg(s) => assert_eq!(s, AppNotice::NoActiveKeySelected.to_string()),
-            other => panic!("expected AppNotice::Msg(NoActiveKeySelected), got {other:?}"),
+            AppNotice::NoSigningKeyAvailable => {}
+            other => panic!("expected NoSigningKeyAvailable, got {other:?}"),
         }
     }
 

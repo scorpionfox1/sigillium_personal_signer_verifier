@@ -6,7 +6,7 @@ use rand::{rngs::OsRng, RngCore};
 use std::fs;
 use std::path::PathBuf;
 
-use super::{append_key, read_master_key, write_blank_keyfile};
+use super::{append_sign_verify_key, read_master_key, write_blank_keyfile};
 use crate::{keyfile::KEYFILE_FILENAME, notices::AppResult};
 
 pub struct OpsFixture {
@@ -55,7 +55,7 @@ pub fn mk_fixture_one_key(passphrase: &str, associated_key_id: &str) -> AppResul
     let private = [9u8; 32];
 
     // first key is always id=1 for a blank keyfile
-    append_key(
+    append_sign_verify_key(
         &fx.path,
         &fx.master_key,
         &domain,

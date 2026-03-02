@@ -102,19 +102,10 @@ pub fn step_next(
 
     match *phase {
         WizardStepPhase::Text => {
-            if section_has_translation(sec) {
-                *phase = WizardStepPhase::Translation;
-            } else if section_has_inputs(sec) {
-                *phase = WizardStepPhase::Inputs;
-            } else {
-                // no translation + no inputs: advance section/doc
-                advance_to_next_section_or_doc(wiz, section_index, phase)?;
-            }
-        }
-        WizardStepPhase::Translation => {
             if section_has_inputs(sec) {
                 *phase = WizardStepPhase::Inputs;
             } else {
+                // no inputs: advance section/doc
                 advance_to_next_section_or_doc(wiz, section_index, phase)?;
             }
         }
@@ -194,23 +185,16 @@ pub fn step_back(
         return Ok(());
     }
 
-    // From here on, only Translation/Inputs need to look at the current section.
+    // From here on, only Inputs needs to look at the current section.
     let Some(doc) = wiz.docs.get(wiz.doc_index) else {
         return Ok(());
     };
-    let Some(sec) = doc.sections.get(*section_index) else {
+    if doc.sections.get(*section_index).is_none() {
         return Ok(());
-    };
+    }
 
     match *phase {
         WizardStepPhase::Inputs => {
-            if section_has_translation(sec) {
-                *phase = WizardStepPhase::Translation;
-            } else {
-                *phase = WizardStepPhase::Text;
-            }
-        }
-        WizardStepPhase::Translation => {
             *phase = WizardStepPhase::Text;
         }
         WizardStepPhase::Text => {
@@ -268,8 +252,6 @@ pub fn set_phase_to_last_step_in_section(
 
     if section_has_inputs(sec) {
         *phase = WizardStepPhase::Inputs;
-    } else if section_has_translation(sec) {
-        *phase = WizardStepPhase::Translation;
     } else {
         *phase = WizardStepPhase::Text;
     }
@@ -299,14 +281,6 @@ pub fn is_last_step(wiz: &WizardState, section_index: usize, phase: WizardStepPh
     // Determine whether there is any step after the current one.
     match phase {
         WizardStepPhase::Text => {
-            if section_has_translation(sec) {
-                return false;
-            }
-            if section_has_inputs(sec) {
-                return false;
-            }
-        }
-        WizardStepPhase::Translation => {
             if section_has_inputs(sec) {
                 return false;
             }

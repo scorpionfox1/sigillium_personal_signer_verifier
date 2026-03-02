@@ -6,7 +6,7 @@ use eframe::egui;
 use serde_json::Value as JsonValue;
 use sigillium_personal_signer_verifier_lib::context::AppCtx;
 use sigillium_personal_signer_verifier_lib::types::{AppState, SignOutputMode, SignVerifyMode};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::{Route, RoutePrefill};
@@ -45,6 +45,8 @@ pub struct DocumentWizardPanel {
 
     bundle_out: String,
     bundle_build_attempted: bool,
+
+    translation_view_sections: BTreeSet<(usize, usize)>,
 }
 
 impl DocumentWizardPanel {
@@ -60,6 +62,7 @@ impl DocumentWizardPanel {
             json_buf: BTreeMap::new(),
             bundle_out: String::new(),
             bundle_build_attempted: false,
+            translation_view_sections: BTreeSet::new(),
         }
     }
 
@@ -73,6 +76,7 @@ impl DocumentWizardPanel {
         self.json_buf.clear();
         self.bundle_out.clear();
         self.bundle_build_attempted = false;
+        self.translation_view_sections.clear();
         self.msg.clear();
     }
 
@@ -96,37 +100,6 @@ impl DocumentWizardPanel {
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 self.ui_template_picker(ui);
-
-                if let Some(wiz) = self.wizard.as_ref() {
-                    let doc_count = wiz.docs.len();
-                    let doc_index = wiz.doc_index;
-                    let section_count = wiz
-                        .docs
-                        .get(doc_index)
-                        .map(|d| d.sections.len())
-                        .unwrap_or(0);
-
-                    let label = if matches!(self.mode, WizardPanelMode::ReviewBuild)
-                        || matches!(self.phase, WizardStepPhase::BundleAbout)
-                    {
-                        format!("Doc 0 of {}", doc_count.max(1))
-                    } else {
-                        let section_num = match self.phase {
-                            WizardStepPhase::About => 0,
-                            _ => self.section_index.saturating_add(1),
-                        };
-                        format!(
-                            "Doc {} of {} — Section {} of {}",
-                            doc_index.saturating_add(1),
-                            doc_count.max(1),
-                            section_num,
-                            section_count,
-                        )
-                    };
-
-                    ui.label(label);
-                    ui.add_space(6.0);
-                }
 
                 ui.add_space(6.0);
                 self.msg.show(ui);
@@ -154,6 +127,7 @@ impl DocumentWizardPanel {
 
                 let section_index = &mut self.section_index;
                 let phase = &mut self.phase;
+                let translation_view_sections = &mut self.translation_view_sections;
 
                 match mode {
                     WizardPanelMode::EditDocs => {
@@ -167,6 +141,7 @@ impl DocumentWizardPanel {
                             mode_ref,
                             section_index,
                             phase,
+                            translation_view_sections,
                             wiz,
                         );
                     }
@@ -215,6 +190,7 @@ impl DocumentWizardPanel {
                             self.mode = WizardPanelMode::EditDocs;
                             self.section_index = 0;
                             self.phase = WizardStepPhase::Text;
+                            self.translation_view_sections.clear();
 
                             match dw::load_wizard_from_str(&s) {
                                 Ok(w) => {
@@ -257,6 +233,7 @@ impl DocumentWizardPanel {
         mode: &mut WizardPanelMode,
         section_index: &mut usize,
         phase: &mut WizardStepPhase,
+        translation_view_sections: &mut BTreeSet<(usize, usize)>,
         wiz: &mut dw::WizardState,
     ) {
         bundle_out.clear();
@@ -291,7 +268,7 @@ impl DocumentWizardPanel {
                     || doc_has_about(wiz)
                     || bundle_has_about(wiz)
             }
-            WizardStepPhase::Translation | WizardStepPhase::Inputs => true,
+            WizardStepPhase::Inputs => true,
         };
 
         let at_last = is_last_step(wiz, *section_index, *phase);
@@ -328,6 +305,26 @@ impl DocumentWizardPanel {
 
         let mut markdown_preview: Option<(String, String)> = None;
 
+        let section_num = match *phase {
+            WizardStepPhase::BundleAbout | WizardStepPhase::About => 0,
+            _ => section_index.saturating_add(1),
+        };
+        let document_num = match *phase {
+            WizardStepPhase::BundleAbout => 0,
+            _ => doc_index.saturating_add(1),
+        };
+
+        let counter_label = format!(
+            "Section {} of {} — Document {} of {}",
+            section_num,
+            section_count,
+            document_num,
+            wiz.docs.len().max(1),
+        );
+
+        ui.label(counter_label);
+        ui.add_space(6.0);
+
         // Centerpiece: section text / translation / inputs.
         match *phase {
             WizardStepPhase::BundleAbout => {
@@ -342,10 +339,10 @@ impl DocumentWizardPanel {
 
                 markdown_preview = Some(("About Bundle".to_string(), about.to_string()));
 
-                ui_doc_screen_skeleton_notice_above_header(
+                ui_doc_screen_skeleton_notice_below_body(
                     ui,
                     "About Bundle",
-                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle of one or more documents you are about to read and ultimately sign.",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the bundle (the collection of 1 or more of documents) you are about to read.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -360,10 +357,10 @@ impl DocumentWizardPanel {
 
                 markdown_preview = Some(("About Document".to_string(), about.to_string()));
 
-                ui_doc_screen_skeleton_notice_above_header(
+                ui_doc_screen_skeleton_notice_below_body(
                     ui,
                     "About Document",
-                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information about the single document you are about to read and ultimately sign.",
+                    "THIS SECTION WILL NOT BE SIGNED. It contains non-authoritative context information for a document.",
                     |ui| {
                         let mut text = about.to_string();
                         ui_doc_text_window(ui, &mut text);
@@ -376,21 +373,28 @@ impl DocumentWizardPanel {
                     ui.label("(No section.)");
                     return;
                 };
-                markdown_preview = Some((format!("{} (section)", doc_label), section.text.clone()));
-                ui_section_text(ui, &doc_label, section);
-            }
-            WizardStepPhase::Translation => {
-                let Ok(section) = dw::current_section(wiz, *section_index) else {
-                    ui.label("(No section.)");
-                    return;
-                };
-                if let Some(translation) = section.translation.as_ref() {
-                    markdown_preview = Some((
-                        format!("{} (translation)", doc_label),
-                        translation.text.clone(),
-                    ));
+
+                let section_key = (wiz.doc_index, *section_index);
+                let show_translation = translation_view_sections.contains(&section_key)
+                    && section
+                        .translation
+                        .as_ref()
+                        .map(|t| !t.text.trim().is_empty())
+                        .unwrap_or(false);
+
+                if show_translation {
+                    if let Some(translation) = section.translation.as_ref() {
+                        markdown_preview = Some((
+                            format!("{} (translation)", doc_label),
+                            translation.text.clone(),
+                        ));
+                    }
+                } else {
+                    markdown_preview =
+                        Some((format!("{} (section)", doc_label), section.text.clone()));
                 }
-                ui_section_translation(ui, &doc_label, section);
+
+                ui_section_text(ui, &doc_label, section, show_translation);
             }
             WizardStepPhase::Inputs => {
                 let specs = dw::current_section(wiz, *section_index)
@@ -414,7 +418,7 @@ impl DocumentWizardPanel {
             ui.horizontal(|ui| {
                 // Back on the left.
                 let back_btn =
-                    widgets::large_button("← Back").min_size(egui::vec2(back_w, button_height));
+                    widgets::large_button("<< Back").min_size(egui::vec2(back_w, button_height));
 
                 if ui.add_enabled(can_back, back_btn).clicked() {
                     if let Err(e) = step_back(wiz, section_index, phase) {
@@ -435,10 +439,40 @@ impl DocumentWizardPanel {
                     }
                 }
 
+                if *phase == WizardStepPhase::Text {
+                    if let Ok(section) = dw::current_section(wiz, *section_index) {
+                        if section
+                            .translation
+                            .as_ref()
+                            .map(|t| !t.text.trim().is_empty())
+                            .unwrap_or(false)
+                        {
+                            let section_key = (wiz.doc_index, *section_index);
+                            let showing_translation =
+                                translation_view_sections.contains(&section_key);
+                            let label = if showing_translation {
+                                "View original"
+                            } else {
+                                "View translation"
+                            };
+
+                            let toggle_btn = widgets::large_button(label)
+                                .min_size(egui::vec2(170.0, button_height));
+                            if ui.add(toggle_btn).clicked() {
+                                if showing_translation {
+                                    translation_view_sections.remove(&section_key);
+                                } else {
+                                    translation_view_sections.insert(section_key);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Next on the right, same baseline and height.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let next_btn =
-                        widgets::large_button("Next →").min_size(egui::vec2(next_w, button_height));
+                    let next_btn = widgets::large_button("Next >>")
+                        .min_size(egui::vec2(next_w, button_height));
 
                     if ui.add_enabled(can_next, next_btn).clicked() {
                         if *phase == WizardStepPhase::Inputs {
@@ -679,18 +713,18 @@ fn default_raw_text_filename(index: usize, label: &str) -> String {
     }
 }
 
-fn ui_doc_screen_skeleton_notice_above_header(
+fn ui_doc_screen_skeleton_notice_below_body(
     ui: &mut egui::Ui,
     header: &str,
     notice: &str,
     body: impl FnOnce(&mut egui::Ui),
 ) {
     widgets::doc_panel_container(ui, |ui| {
-        widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
-        ui.add_space(8.0);
         widgets::screen_header(ui, header);
         ui.add_space(6.0);
         body(ui);
+        ui.add_space(8.0);
+        widgets::ui_notice(ui, notice, widgets::NoticeAlign::Center);
     });
 }
 
@@ -717,29 +751,27 @@ fn ui_section_text(
     ui: &mut egui::Ui,
     doc_label: &str,
     s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
+    show_translation: bool,
 ) {
+    if show_translation {
+        let Some(t) = s.translation.as_ref() else {
+            ui.label("(No translation.)");
+            return;
+        };
+
+        let header = format!("{} (translation)", doc_label);
+        ui_doc_screen_skeleton_notice_below_body(ui, header.as_str(), "THIS SECTION WILL NOT BE SIGNED. It is a translation of the document section text provided for convenience. Please confirm the translation for yourself.", |ui| {
+            ui.label(format!("Language: {}", t.lang));
+            ui.add_space(6.0);
+
+            let mut text = t.text.clone();
+            ui_doc_text_window(ui, &mut text);
+        });
+        return;
+    }
+
     ui_doc_screen_skeleton(ui, Some(doc_label), |ui| {
         let mut text = s.text.clone();
-        ui_doc_text_window(ui, &mut text);
-    });
-}
-
-fn ui_section_translation(
-    ui: &mut egui::Ui,
-    doc_label: &str,
-    s: &sigillium_personal_signer_verifier_lib::template::doc_wizard::SectionTemplate,
-) {
-    let Some(t) = s.translation.as_ref() else {
-        ui.label("(No translation.)");
-        return;
-    };
-
-    let header = format!("{} (translation)", doc_label);
-    ui_doc_screen_skeleton_notice_above_header(ui, header.as_str(), "THIS SECTION IS NOT SIGNED. It is a translation of the text of the preceding section provided for convenience, but since it is not signed it is not authoritative. Please confirm the translation at will.", |ui| {
-        ui.label(format!("Language: {}", t.lang));
-        ui.add_space(6.0);
-
-        let mut text = t.text.clone();
         ui_doc_text_window(ui, &mut text);
     });
 }
