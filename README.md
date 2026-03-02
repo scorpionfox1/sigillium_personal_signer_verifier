@@ -101,6 +101,15 @@ The two key types are intentionally different in behavior, not just in storage f
 
 In practice, this allows one key registry to hold both local signing identities and external/public verification identities, while preserving explicit operator feedback when a key lacks signing capability.
 
+### Domain standardization security option
+
+At key install time, the UI includes **Enforce standardized domain (recommended)**.
+
+- When enabled, the domain is normalized/validated to a constrained ASCII-safe form before key derivation and storage.
+- When disabled, the exact user-entered domain string is used as-is.
+
+Because the domain participates in key derivation, this option is security-relevant: accidental domain spelling/encoding drift can produce a different key than expected. The standardized mode reduces that risk for routine workflows.
+
 ---
 
 
