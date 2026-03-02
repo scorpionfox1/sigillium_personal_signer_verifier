@@ -5,6 +5,7 @@ use sigillium_personal_signer_verifier_lib::{
     command,
     command_state::lock_session,
     context::AppCtx,
+    keyfile::KeyType,
     notices::AppNotice,
     types::{AppState, SignOutputMode, SignVerifyMode},
 };
@@ -88,6 +89,10 @@ impl SignPanel {
 
                 let current_active_id = lock_session(state).ok().and_then(|g| g.active_key_id);
 
+                let active_key_type = current_active_id
+                    .and_then(|id| metas.iter().find(|m| m.id == id).map(|m| m.key_type))
+                    .unwrap_or(KeyType::SignVerify);
+
                 let active_pubkey_hex = current_active_id
                     .and_then(|id| {
                         metas
@@ -102,6 +107,17 @@ impl SignPanel {
                     .and_then(|g| g.active_associated_key_id.clone())
                     .unwrap_or_default();
 
+                let has_active = current_active_id.is_some();
+                let signing_available = has_active && active_key_type == KeyType::SignVerify;
+                if has_active && !signing_available {
+                    ui.colored_label(
+                        ui.visuals().warn_fg_color,
+                        "Selected key has no signing key material (verify-only key).",
+                    );
+                    ui.add_space(6.0);
+                }
+
+                ui.add_enabled_ui(signing_available, |ui| {
                 // ---- Sign mode (Text / JSON)
                 let mut sign_mode = state
                     .sign_verify_mode
@@ -234,8 +250,7 @@ r#"{
 
                 ui.add_space(2.0);
 
-                let has_active = current_active_id.is_some();
-                let can_sign = has_active && !self.message.trim().is_empty();
+                let can_sign = signing_available && !self.message.trim().is_empty();
 
                 ui.horizontal(|ui| {
                     if ui
@@ -377,11 +392,20 @@ r#"{
 
                 });
 
+
+                });
+
                 self.msg.show(ui);
 
                 ui.add_space(8.0);
                 ui.separator();
 
+
+                let output_mode = state
+                    .sign_output_mode
+                    .lock()
+                    .map(|m| *m)
+                    .unwrap_or(SignOutputMode::Signature);
 
                 let left_label = if output_mode == SignOutputMode::Signature {
                     "Signature (base64)"

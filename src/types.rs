@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+use crate::keyfile::KeyType;
 use crate::security_log::SecurityLog;
 
 pub type KeyId = u64;
@@ -36,6 +37,7 @@ pub struct KeyMeta {
     pub id: KeyId,
     pub domain: String,
     pub public_key: [u8; 32],
+    pub key_type: KeyType,
 
     // decrypted in-memory only (encrypted at rest in keyfile)
     pub label: Zeroizing<String>,

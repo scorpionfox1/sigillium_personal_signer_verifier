@@ -78,9 +78,16 @@ fn reencrypt_private_key(
     old_z: &Zeroizing<[u8; 32]>,
     new_z: &Zeroizing<[u8; 32]>,
 ) -> AppResult<()> {
-    let nonce = decode_nonce12_b64(&k.key_nonce_b64)?;
+    let Some(key_nonce_b64) = k.key_nonce_b64.as_deref() else {
+        return Ok(());
+    };
+    let Some(encrypted_private_key_b64) = k.encrypted_private_key_b64.as_deref() else {
+        return Ok(());
+    };
+
+    let nonce = decode_nonce12_b64(key_nonce_b64)?;
     let ct = general_purpose::STANDARD
-        .decode(&k.encrypted_private_key_b64)
+        .decode(encrypted_private_key_b64)
         .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     let mut pt = decrypt_bytes_with_aad(old_z, aad_priv, &nonce, &ct)?;
@@ -88,8 +95,8 @@ fn reencrypt_private_key(
     let (n, ct) = encrypt_bytes_with_aad(new_z, aad_priv, &pt)?;
     pt.zeroize();
 
-    k.key_nonce_b64 = general_purpose::STANDARD.encode(n);
-    k.encrypted_private_key_b64 = general_purpose::STANDARD.encode(ct);
+    k.key_nonce_b64 = Some(general_purpose::STANDARD.encode(n));
+    k.encrypted_private_key_b64 = Some(general_purpose::STANDARD.encode(ct));
     Ok(())
 }
 
@@ -135,7 +142,7 @@ mod tests {
 
         let (priv_before, assoc_before) =
             decrypt_key_material(&f1.fx.path, &f1.fx.master_key, f1.key_id).unwrap();
-        assert_eq!(priv_before, f1.private);
+        assert_eq!(priv_before, Some(f1.private));
         assert_eq!(assoc_before, "assoc-123");
 
         // Change passphrase
@@ -155,7 +162,7 @@ mod tests {
 
         let (priv_after, assoc_after) =
             decrypt_key_material(&f1.fx.path, &new_master, f1.key_id).unwrap();
-        assert_eq!(priv_after, f1.private);
+        assert_eq!(priv_after, Some(f1.private));
         assert_eq!(assoc_after, "assoc-123");
     }
 }

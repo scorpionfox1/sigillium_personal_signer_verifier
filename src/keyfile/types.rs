@@ -4,6 +4,7 @@ use crate::types::KeyId;
 use serde::{Deserialize, Serialize};
 
 pub const KEYFILE_VERSION: u32 = 1;
+pub const KEYFILE_MIN_SUPPORTED_VERSION: u32 = 1;
 pub const KEYFILE_FORMAT: &str = "sigillium-keyfile";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,15 +26,26 @@ pub struct KeyEntry {
     pub domain: String,
     pub public_key_hex: String,
 
+    #[serde(default)]
+    pub key_type: KeyType,
+
     // encrypted private key
-    pub key_nonce_b64: String,
-    pub encrypted_private_key_b64: String,
+    pub key_nonce_b64: Option<String>,
+    pub encrypted_private_key_b64: Option<String>,
 
     // encrypted associated_key_id
     pub associated_key_id: EncryptedString,
 
     // encrypted label (UX-only)
     pub label: EncryptedString,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyType {
+    #[default]
+    SignVerify,
+    VerifyOnly,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

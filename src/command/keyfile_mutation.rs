@@ -63,7 +63,7 @@ pub fn install_key(
         let _lock = acquire_keyfile_lock(&keyfile_path)?;
 
         with_master_key(state, |mk| {
-            keyfile::append_key(
+            keyfile::append_sign_verify_key(
                 &keyfile_path,
                 &*mk,
                 &domain_for_derivation,
@@ -83,6 +83,77 @@ pub fn install_key(
 
     privk.zeroize();
     op_res
+}
+
+pub fn install_verify_only_key(
+    public_key_hex: &str,
+    domain: &str,
+    label: &str,
+    associated_key_id: Option<&str>,
+    enforce_standard_domain: bool,
+    state: &AppState,
+    ctx: &AppCtx,
+) -> AppResult<()> {
+    let public_key_hex = public_key_hex.trim();
+    if public_key_hex.is_empty() {
+        return Err(AppNotice::InvalidPublicKeyHex);
+    }
+
+    let label = label.trim();
+    if label.is_empty() {
+        return Err(AppNotice::EmptyLabel);
+    }
+
+    let domain_for_derivation: String = if enforce_standard_domain {
+        let d = domain.trim();
+        if d.is_empty() {
+            String::new()
+        } else {
+            validate_standard_domain_ascii(d).map_err(|_| AppNotice::InvalidStandardDomain)?
+        }
+    } else {
+        domain.to_string()
+    };
+
+    let keyfile_path = ctx
+        .current_keyfile_path()
+        .ok_or_else(|| AppNotice::Msg("No keyfile selected".into()))?;
+
+    let associated_norm: String = associated_key_id.unwrap_or("").trim().to_string();
+    let pubk = crypto::decode_public_key_hex(public_key_hex)?;
+
+    (|| {
+        enforce_keyfile_perms_best_effort(
+            state,
+            &keyfile_path,
+            &ctx.app_data_dir,
+            "install_verify_only_key",
+        );
+
+        let _lock = acquire_keyfile_lock(&keyfile_path)?;
+
+        with_master_key(state, |mk| {
+            keyfile::append_verify_only_key(
+                &keyfile_path,
+                &*mk,
+                &domain_for_derivation,
+                label,
+                &pubk,
+                &associated_norm,
+            )
+        })?;
+
+        enforce_keyfile_perms_best_effort(
+            state,
+            &keyfile_path,
+            &ctx.app_data_dir,
+            "install_verify_only_key",
+        );
+
+        super::refresh_key_meta_cache(state, ctx)?;
+
+        Ok(())
+    })()
 }
 
 pub fn uninstall_active_key(state: &AppState, ctx: &AppCtx) -> AppResult<()> {

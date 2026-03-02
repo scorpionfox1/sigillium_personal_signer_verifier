@@ -6,7 +6,7 @@ use crate::{
     keyfile::{
         crypto::*,
         fs::write_json,
-        types::{EncryptedString, KeyEntry},
+        types::{EncryptedString, KeyEntry, KeyType},
         validate::set_file_mac_in_place,
     },
     notices::{AppNotice, AppResult},
@@ -18,7 +18,7 @@ use zeroize::Zeroizing;
 
 use super::read_json_verified_optional_mac;
 
-pub fn append_key(
+pub fn append_sign_verify_key(
     path: &Path,
     master_key: &[u8; 32],
     domain: &str,
@@ -60,9 +60,57 @@ pub fn append_key(
         id: next_id,
         domain: domain.to_string(),
         public_key_hex,
-        key_nonce_b64: general_purpose::STANDARD.encode(nonce_bytes),
-        encrypted_private_key_b64: general_purpose::STANDARD.encode(ciphertext),
+        key_type: KeyType::SignVerify,
+        key_nonce_b64: Some(general_purpose::STANDARD.encode(nonce_bytes)),
+        encrypted_private_key_b64: Some(general_purpose::STANDARD.encode(ciphertext)),
         associated_key_id: associated,
+        label: EncryptedString {
+            nonce_b64: label_enc.0,
+            ciphertext_b64: label_enc.1,
+        },
+    });
+
+    set_file_mac_in_place(&mut data, master_key)?;
+    write_json(&path, &data)
+}
+
+pub fn append_verify_only_key(
+    path: &Path,
+    master_key: &[u8; 32],
+    domain: &str,
+    label: &str,
+    public_key: &[u8; 32],
+    associated_key_id: &str,
+) -> AppResult<()> {
+    let mut data = read_json_verified_optional_mac(&path, master_key)?;
+
+    let next_id = data.keys.iter().map(|k| k.id).max().unwrap_or(0) + 1;
+    let public_key_hex = hex::encode(public_key);
+    let master_key_z = Zeroizing::new(*master_key);
+
+    let label_enc = encrypt_string_with_aad(
+        &master_key_z,
+        &aad_for_label(&data, next_id, domain, &public_key_hex),
+        &Zeroizing::new(label.to_owned()),
+    )?;
+
+    let enc = encrypt_string_with_aad(
+        &master_key_z,
+        &aad_for_associated_key_id(&data, next_id, domain, &public_key_hex),
+        &Zeroizing::new(associated_key_id.to_owned()),
+    )?;
+
+    data.keys.push(KeyEntry {
+        id: next_id,
+        domain: domain.to_string(),
+        public_key_hex,
+        key_type: KeyType::VerifyOnly,
+        key_nonce_b64: None,
+        encrypted_private_key_b64: None,
+        associated_key_id: EncryptedString {
+            nonce_b64: enc.0,
+            ciphertext_b64: enc.1,
+        },
         label: EncryptedString {
             nonce_b64: label_enc.0,
             ciphertext_b64: label_enc.1,
@@ -107,7 +155,7 @@ mod tests {
         let fx = mk_fixture("passphrase").unwrap();
 
         // Add 3 keys => ids 1,2,3
-        append_key(
+        append_sign_verify_key(
             &fx.path,
             &fx.master_key,
             "k1.com",
@@ -117,7 +165,7 @@ mod tests {
             "",
         )
         .unwrap();
-        append_key(
+        append_sign_verify_key(
             &fx.path,
             &fx.master_key,
             "k2.com",
@@ -127,7 +175,7 @@ mod tests {
             "",
         )
         .unwrap();
-        append_key(
+        append_sign_verify_key(
             &fx.path,
             &fx.master_key,
             "k3.com",
@@ -152,7 +200,7 @@ mod tests {
         assert_eq!(max_id(&data), 1);
 
         // Next append => id should be 2 (max+1)
-        append_key(
+        append_sign_verify_key(
             &fx.path,
             &fx.master_key,
             "k4.com",
@@ -189,9 +237,9 @@ mod tests {
         assert_eq!(label_pt.as_str(), f1.label.as_str());
 
         // private decrypt
-        let nonce12 = decode_nonce12_b64(&k.key_nonce_b64).unwrap();
+        let nonce12 = decode_nonce12_b64(k.key_nonce_b64.as_deref().unwrap()).unwrap();
         let ct = general_purpose::STANDARD
-            .decode(&k.encrypted_private_key_b64)
+            .decode(k.encrypted_private_key_b64.as_deref().unwrap())
             .unwrap();
 
         let pt = decrypt_bytes_with_aad(
