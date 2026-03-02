@@ -32,6 +32,7 @@ pub enum AppNotice {
     KeyfileDirNameInvalid,
     AppLocked,
     NoActiveKeySelected,
+    NoSigningKeyAvailable,
     KeyfileMissingOrCorrupted,
     KeyfileQuarantined { dir_name: String },
     StringCopied,
@@ -152,6 +153,7 @@ impl AppNotice {
             KeyfileDirNameInvalid => "Invalid keyfile name.",
             AppLocked => "App is locked.",
             NoActiveKeySelected => "No active key selected.",
+            NoSigningKeyAvailable => "No signing key available for the selected key.",
             KeyfileMissingOrCorrupted => "Keyfile missing or corrupted.",
             KeyfileQuarantined { .. } => {
                 kind = UserMsgKind::Warn;
@@ -280,6 +282,7 @@ impl fmt::Display for AppNotice {
             KeyfileDirNameInvalid => write!(f, "Bad keyfile name."), // ui calls it "keyfile name," but in fact it is a dir
             AppLocked => write!(f, "app is locked"),
             NoActiveKeySelected => write!(f, "no active key selected"),
+            NoSigningKeyAvailable => write!(f, "no signing key available"),
             KeyfileMissingOrCorrupted => write!(f, "keyfile missing or corrupted"),
             KeyfileQuarantined { dir_name } => {
                 write!(f, "keyfile corrupted and quarantined: {dir_name}")

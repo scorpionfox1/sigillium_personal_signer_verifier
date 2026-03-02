@@ -57,7 +57,13 @@ pub fn sign_message(
     let sig = crate::command_state::with_active_private(state, |privk| {
         Ok(crypto::sign_message(&*privk, &to_sign))
     })
-    .map_err(AppNotice::Msg)?;
+    .map_err(|e| {
+        if e == AppNotice::NoActiveKeySelected.to_string() {
+            AppNotice::NoSigningKeyAvailable
+        } else {
+            AppNotice::Msg(e)
+        }
+    })?;
 
     let sig_base64 = STANDARD.encode(&sig);
 

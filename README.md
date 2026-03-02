@@ -76,8 +76,27 @@ Private keys are stored encrypted at rest.
 
 ### Key installation
 
-Keys are currently installed from a **BIP39 mnemonic** plus domain.  
-Importing raw private keys may be added in the future but is not part of v1.
+Keys can be installed as:
+
+- **Sign / Verify key**: from a **BIP39 mnemonic** plus domain, or
+- **Verify-only key**: from a **public key hex** plus optional metadata (no private key material stored).
+
+This supports workflows where operators need to verify signatures from third-party keys without importing signing secrets.
+
+---
+
+
+## Keyfile format compatibility
+
+The keyfile includes explicit compatibility markers:
+
+- `version` — keyfile schema version
+- `format` — keyfile format marker
+- `app` — application marker
+
+Current reader behavior accepts versions in a supported range (`KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION`) and rejects versions outside that range.
+
+This is intended to support future post-1.0 compatibility policy where newer releases can continue reading older keyfile versions while still rejecting unknown future versions.
 
 ---
 

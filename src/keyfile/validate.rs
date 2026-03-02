@@ -3,7 +3,7 @@
 use crate::crypto as app_crypto;
 use crate::keyfile::crypto::decode_nonce12_b64;
 use crate::keyfile::fs::read_json;
-use crate::keyfile::types::KeyfileData;
+use crate::keyfile::types::{KeyType, KeyfileData};
 use crate::notices::{AppNotice, AppResult};
 use crate::types::KeyId;
 use base64::{engine::general_purpose, Engine as _};
@@ -50,11 +50,29 @@ pub(crate) fn validate_keyfile_structure(data: &KeyfileData) -> AppResult<()> {
 
         app_crypto::decode_public_key_hex(&k.public_key_hex)?;
 
-        // nonce is always 12 bytes for ChaCha20-Poly1305
-        decode_nonce12_b64(&k.key_nonce_b64)?;
+        match k.key_type {
+            KeyType::SignVerify => {
+                let key_nonce_b64 = k
+                    .key_nonce_b64
+                    .as_deref()
+                    .ok_or(AppNotice::KeyfileStructCorrupted)?;
+                let encrypted_private_key_b64 = k
+                    .encrypted_private_key_b64
+                    .as_deref()
+                    .ok_or(AppNotice::KeyfileStructCorrupted)?;
 
-        // ciphertext must be base64 decodable (length can vary)
-        decode_b64(&k.encrypted_private_key_b64)?;
+                // nonce is always 12 bytes for ChaCha20-Poly1305
+                decode_nonce12_b64(key_nonce_b64)?;
+
+                // ciphertext must be base64 decodable (length can vary)
+                decode_b64(encrypted_private_key_b64)?;
+            }
+            KeyType::VerifyOnly => {
+                if k.key_nonce_b64.is_some() || k.encrypted_private_key_b64.is_some() {
+                    return Err(AppNotice::KeyfileStructCorrupted);
+                }
+            }
+        }
 
         // associated_key_id is required now
         decode_nonce12_b64(&k.associated_key_id.nonce_b64)?;

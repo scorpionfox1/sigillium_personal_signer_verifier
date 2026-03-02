@@ -43,6 +43,7 @@ pub fn list_key_meta(path: &Path, master_key: &[u8; 32]) -> AppResult<Vec<KeyMet
             id: k.id,
             domain: k.domain.clone(),
             public_key: pk,
+            key_type: k.key_type,
             label,
         });
     }
@@ -54,7 +55,7 @@ pub fn decrypt_key_material(
     path: &Path,
     master_key: &[u8; 32],
     key_id: KeyId,
-) -> AppResult<([u8; 32], String)> {
+) -> AppResult<(Option<[u8; 32]>, String)> {
     let data = read_json_verified_optional_mac(path, master_key)?;
     let entry = data
         .keys
@@ -81,10 +82,23 @@ fn decrypt_private_key_field(
     data: &KeyfileData,
     entry: &KeyEntry,
     master_key: &Zeroizing<[u8; 32]>,
-) -> AppResult<[u8; 32]> {
-    let nonce = decode_nonce12_b64(&entry.key_nonce_b64)?;
+) -> AppResult<Option<[u8; 32]>> {
+    if entry.key_type == crate::keyfile::KeyType::VerifyOnly {
+        return Ok(None);
+    }
+
+    let key_nonce_b64 = entry
+        .key_nonce_b64
+        .as_deref()
+        .ok_or(AppNotice::KeyfileCorrupt)?;
+    let encrypted_private_key_b64 = entry
+        .encrypted_private_key_b64
+        .as_deref()
+        .ok_or(AppNotice::KeyfileCorrupt)?;
+
+    let nonce = decode_nonce12_b64(key_nonce_b64)?;
     let ct = general_purpose::STANDARD
-        .decode(&entry.encrypted_private_key_b64)
+        .decode(encrypted_private_key_b64)
         .map_err(|e| AppNotice::InvalidCiphertextBase64(e.to_string()))?;
 
     let mut pt = decrypt_bytes_with_aad(
@@ -102,7 +116,7 @@ fn decrypt_private_key_field(
     let mut out = [0u8; 32];
     out.copy_from_slice(&pt);
     pt.zeroize();
-    Ok(out)
+    Ok(Some(out))
 }
 
 pub fn inspect_keyfile(path: &Path) -> AppResult<()> {

@@ -1,7 +1,9 @@
 // src/keyfile/fs/io.rs
 
 use crate::context::APP_ID;
-use crate::keyfile::types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION};
+use crate::keyfile::types::{
+    KeyfileData, KEYFILE_FORMAT, KEYFILE_MIN_SUPPORTED_VERSION, KEYFILE_VERSION,
+};
 use crate::notices::{AppNotice, AppResult};
 
 use rand::rngs::OsRng;
@@ -32,7 +34,7 @@ pub(crate) fn read_json(path: &Path) -> AppResult<KeyfileData> {
     let data: KeyfileData =
         serde_json::from_str(&text).map_err(|e| AppNotice::KeyfileFsInvalidJson(e.to_string()))?;
 
-    if data.version != KEYFILE_VERSION {
+    if !is_supported_keyfile_version(data.version) {
         return Err(AppNotice::KeyfileFsUnsupportedVersion {
             got: data.version,
             expected: KEYFILE_VERSION,
@@ -44,6 +46,10 @@ pub(crate) fn read_json(path: &Path) -> AppResult<KeyfileData> {
     }
 
     Ok(data)
+}
+
+fn is_supported_keyfile_version(version: u32) -> bool {
+    (KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION).contains(&version)
 }
 
 pub(crate) fn write_json(path: &Path, data: &KeyfileData) -> AppResult<()> {
@@ -162,7 +168,9 @@ pub fn backup_keyfile_with_quarantine_prefix(keyfile_path: &Path) -> AppResult<P
 mod tests {
     use super::*;
     use crate::context::APP_ID;
-    use crate::keyfile::types::{KeyfileData, KEYFILE_FORMAT, KEYFILE_VERSION};
+    use crate::keyfile::types::{
+        KeyfileData, KEYFILE_FORMAT, KEYFILE_MIN_SUPPORTED_VERSION, KEYFILE_VERSION,
+    };
     use crate::keyfile::KEYFILE_FILENAME;
     use crate::notices::AppNotice;
     use std::fs;
@@ -220,17 +228,49 @@ mod tests {
     }
 
     #[test]
+    fn read_accepts_min_supported_version() {
+        let dir = mk_temp_dir("io_min_supported");
+        let path = dir.join(KEYFILE_FILENAME);
+
+        let mut data = mk_min_keyfile_data();
+        data.version = KEYFILE_MIN_SUPPORTED_VERSION;
+        write_json(&path, &data).unwrap();
+
+        let got = read_json(&path).unwrap();
+        assert_eq!(got.version, KEYFILE_MIN_SUPPORTED_VERSION);
+    }
+
+    #[test]
     fn read_rejects_unsupported_version() {
         let dir = mk_temp_dir("io_bad_version");
         let path = dir.join(KEYFILE_FILENAME);
 
         let mut data = mk_min_keyfile_data();
-        data.version = KEYFILE_VERSION + 1;
+        data.version = KEYFILE_MIN_SUPPORTED_VERSION.saturating_sub(1);
 
         fs::write(&path, serde_json::to_string_pretty(&data).unwrap()).unwrap();
 
         let err = read_json(&path).unwrap_err();
         assert!(matches!(err, AppNotice::KeyfileFsUnsupportedVersion { .. }));
+    }
+
+    #[test]
+    fn read_rejects_future_version() {
+        let dir = mk_temp_dir("io_future_version");
+        let path = dir.join(KEYFILE_FILENAME);
+
+        let mut data = mk_min_keyfile_data();
+        data.version = KEYFILE_VERSION + 1;
+        write_json(&path, &data).unwrap();
+
+        let err = read_json(&path).unwrap_err();
+        assert!(matches!(
+            err,
+            AppNotice::KeyfileFsUnsupportedVersion {
+                got,
+                expected
+            } if got == KEYFILE_VERSION + 1 && expected == KEYFILE_VERSION
+        ));
     }
 
     #[test]

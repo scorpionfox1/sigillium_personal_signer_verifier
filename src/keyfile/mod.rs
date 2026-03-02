@@ -7,7 +7,7 @@ mod types;
 pub(crate) mod validate;
 
 pub use ops::*;
-pub use types::{EncryptedString, KeyEntry, KeyfileData};
+pub use types::{EncryptedString, KeyEntry, KeyType, KeyfileData};
 
 pub use fs::backup_keyfile_with_quarantine_prefix;
 pub use validate::validate_keyfile_structure_on_disk;
