@@ -1,3 +1,46 @@
+## Release v0.8.0
+
+### Notes
+
+This release introduces **explicit keyfile compatibility range enforcement** and expands the key registry model to support both **sign/verify** and **verify-only** key records in a first-class way.
+
+---
+
+### Notable Changes
+
+#### Keyfile compatibility policy
+
+- Added explicit minimum supported keyfile version handling (`KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION`).
+- Reader now rejects both:
+  - keyfiles older than the minimum supported version, and
+  - keyfiles from unknown future versions.
+- Added tests covering minimum-version acceptance and both unsupported-version directions.
+
+#### Key model: sign/verify and verify-only
+
+- Key entries now include a `key_type` discriminator:
+  - `sign_verify` entries include encrypted private key material.
+  - `verify_only` entries store only public verification material.
+- Keyfile structure validation now enforces key-type-specific shape rules for private-key fields.
+- This key-type split is now a first-class runtime capability model:
+  - `sign_verify` keys can perform both sign and verify.
+  - `verify_only` keys can verify but cannot sign.
+
+#### New verify-only key install flow
+
+- Added command support for installing verify-only keys directly from public key hex.
+- Added key registry UI support for choosing install type (`Sign/Verify` vs `Verify-only`) and entering the appropriate fields.
+- Associated key ID and label handling remain encrypted in the keyfile for both key types.
+
+#### Session + signing behavior updates
+
+- Active key selection now supports keys without private material.
+- Signing now emits a dedicated user-facing notice when a verify-only key is selected (`NoSigningKeyAvailable`) instead of a generic selection error.
+- Verification flows are unchanged and continue to work with either key type.
+- This improves UX and safety by making key capability failures explicit at operation time rather than surfacing a generic state error.
+
+---
+
 ## Release v0.7.2
 
 ### Notes

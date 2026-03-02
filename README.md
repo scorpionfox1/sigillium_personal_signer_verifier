@@ -83,6 +83,24 @@ Keys can be installed as:
 
 This supports workflows where operators need to verify signatures from third-party keys without importing signing secrets.
 
+If a **verify-only** key is selected as active, signing operations are blocked with an explicit "no signing key available" notice, while verification continues to work normally.
+
+### Functional difference: Sign/Verify vs Verify-only keys
+
+The two key types are intentionally different in behavior, not just in storage format:
+
+- **Sign / Verify key**
+  - Contains encrypted private key material.
+  - Can be selected and used for both signing and verification operations.
+  - Supports full signer workflows (raw signatures and signature records).
+
+- **Verify-only key**
+  - Contains no private key material.
+  - Can be selected and used as the active key for verification workflows.
+  - Cannot sign; signing attempts fail fast with a dedicated user-facing notice.
+
+In practice, this allows one key registry to hold both local signing identities and external/public verification identities, while preserving explicit operator feedback when a key lacks signing capability.
+
 ---
 
 
@@ -94,9 +112,12 @@ The keyfile includes explicit compatibility markers:
 - `format` — keyfile format marker
 - `app` — application marker
 
-Current reader behavior accepts versions in a supported range (`KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION`) and rejects versions outside that range.
+Current reader behavior accepts versions in a supported range (`KEYFILE_MIN_SUPPORTED_VERSION..=KEYFILE_VERSION`) and rejects versions outside that range (both too old and too new).
 
 This is intended to support future post-1.0 compatibility policy where newer releases can continue reading older keyfile versions while still rejecting unknown future versions.
+
+Key entries now also carry an explicit key type marker (`sign_verify` or `verify_only`).
+`sign_verify` entries contain encrypted private key material; `verify_only` entries intentionally do not.
 
 ---
 
@@ -109,6 +130,12 @@ A message is the byte sequence presented to the signing engine, regardless of ho
 
 - **Text mode**: signs/verifies the raw message bytes.
 - **JSON mode**: signs/verifies a deterministic canonical form of JSON.
+
+### Key capability behavior during sign/verify
+
+- Signing requires an active key with private material (`sign_verify`).
+- If the active key is `verify_only`, signing is rejected with an explicit notice (`NoSigningKeyAvailable`).
+- Verification remains available with either key type because only public key material is required.
 
 ### Signing output modes
 
