@@ -132,15 +132,27 @@ pub fn copy_label_with_button(
 /// - Shows None + installed keys.
 /// - Selecting None clears active key.
 /// - Selecting a key sets it active.
-/// - Returns Err(String) if command layer rejects the change.
+/// - Returns Ok(true) when selection changed, Ok(false) otherwise.
+/// - Returns Err(AppNotice) if command layer rejects the change.
+pub fn key_selector_state_revision(metas: &[KeyMeta]) -> u64 {
+    metas.iter().fold(metas.len() as u64, |acc, m| {
+        acc.wrapping_mul(1099511628211).wrapping_add(m.id)
+    })
+}
+
 pub fn active_key_selector(
     ui: &mut egui::Ui,
     state: &AppState,
     ctx: &AppCtx,
     route: &mut super::Route,
-    id_salt: &'static str,
+    id_salt: impl std::hash::Hash,
     metas: &[KeyMeta],
-) -> Result<Option<KeyId>, AppNotice> {
+) -> Result<bool, AppNotice> {
+    const ACTIVE_KEY_SELECTOR_MAX_WIDTH: f32 = 520.0;
+    const ACTIVE_KEY_SELECTOR_MIN_WIDTH: f32 = 220.0;
+    const KEY_SELECTOR_MAX_VISIBLE_ROWS: usize = 5;
+    const KEY_SELECTOR_ROW_HEIGHT: f32 = 24.0;
+
     let current_active_id: Option<KeyId> = lock_session(state).ok().and_then(|g| g.active_key_id);
 
     let mut choice: Option<KeyId> = current_active_id;
@@ -150,26 +162,32 @@ pub fn active_key_selector(
         None => "None".to_string(),
     };
 
+    let longest_option_len = metas
+        .iter()
+        .map(|k| k.label.len() + k.domain.len() + 3)
+        .max()
+        .unwrap_or("None".len())
+        .max(selected_text.len());
+
+    let target_width = (longest_option_len as f32 * 8.0 + 56.0)
+        .clamp(ACTIVE_KEY_SELECTOR_MIN_WIDTH, ACTIVE_KEY_SELECTOR_MAX_WIDTH)
+        .min(ui.available_width());
+
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text(selected_text)
+        .width(target_width)
+        .height(KEY_SELECTOR_ROW_HEIGHT * KEY_SELECTOR_MAX_VISIBLE_ROWS as f32)
         .show_ui(ui, |ui| {
-            let row_height = ui.spacing().interact_size.y;
-            let max_rows = 5.0;
+            ui.selectable_value(&mut choice, None, "None");
+            ui.separator();
 
-            egui::ScrollArea::vertical()
-                .max_height(row_height * max_rows)
-                .show(ui, |ui| {
-                    ui.selectable_value(&mut choice, None, "None");
-                    ui.separator();
-
-                    for k in metas.iter() {
-                        ui.selectable_value(
-                            &mut choice,
-                            Some(k.id),
-                            format!("{} ({})", k.label.as_str(), k.domain),
-                        );
-                    }
-                });
+            for k in metas.iter() {
+                ui.selectable_value(
+                    &mut choice,
+                    Some(k.id),
+                    format!("{} ({})", k.label.as_str(), k.domain),
+                );
+            }
         });
 
     if choice != current_active_id {
@@ -186,15 +204,15 @@ pub fn active_key_selector(
                     *route = super::Route::KeyfileSelect;
                 }
 
-                res.map(|_| Some(id)).map_err(|e| e)
+                res.map(|_| true).map_err(|e| e)
             }
 
             None => command::clear_active_key(state)
-                .map(|_| None)
+                .map(|_| true)
                 .map_err(|e| e),
         }
     } else {
-        Ok(choice)
+        Ok(false)
     }
 }
 

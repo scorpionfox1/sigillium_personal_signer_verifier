@@ -268,11 +268,31 @@ impl SecurityPanel {
             None => "<no keyfile selected>".to_string(),
         };
 
-        ui.add(egui::TextEdit::singleline(&mut path).interactive(false));
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut path)
+                    .interactive(false)
+                    .desired_width((ui.available_width() - 40.0).max(120.0)),
+            );
+
+            let can_copy_path = path_buf_opt.is_some();
+            widgets::copy_value_with_button(
+                ui,
+                can_copy_path,
+                "Copy keyfile path",
+                &path,
+                &mut self.msg,
+            );
+        });
 
         ui.add_space(10.0);
 
         ui.label("Confirmation phrase");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.confirm_phrase)
+                .hint_text("self destruct")
+                .desired_width(ui.available_width()),
+        );
 
         ui.add_space(10.0);
 

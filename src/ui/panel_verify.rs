@@ -57,19 +57,27 @@ impl VerifyPanel {
 
                 let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
                 let mut active_key_error: Option<AppNotice> = None;
+                let mut active_key_changed = false;
                 ui.horizontal(|ui| {
                     ui.label("Key:");
-                    if let Err(e) = widgets::active_key_selector(
+                    match widgets::active_key_selector(
                         ui,
                         state,
                         ctx,
                         route,
-                        "verify_active_key",
+                        (
+                            "verify_active_key",
+                            widgets::key_selector_state_revision(&metas),
+                        ),
                         &metas,
                     ) {
-                        active_key_error = Some(e);
+                        Ok(changed) => active_key_changed = changed,
+                        Err(e) => active_key_error = Some(e),
                     }
                 });
+                if active_key_changed {
+                    self.clear_messages();
+                }
                 if let Some(e) = active_key_error {
                     if let AppNotice::KeyfileQuarantined { .. } = e {
                         *route = Route::KeyfileSelect;

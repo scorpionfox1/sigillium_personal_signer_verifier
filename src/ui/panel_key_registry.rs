@@ -62,17 +62,51 @@ impl KeyRegistryPanel {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, ctx: &AppCtx, route: &mut Route) {
+        widgets::panel_title(ui, "Key Registry");
+        ui.separator();
+
+        // Keep selector outside ScrollArea (same placement pattern as Sign panel)
+        // to avoid popup viewport differences after runtime key mutations.
+        let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
+
+        let mut active_key_error: Option<AppNotice> = None;
+        let mut active_key_changed = false;
+        ui.horizontal(|ui| {
+            ui.label("Key:");
+            match widgets::active_key_selector(
+                ui,
+                state,
+                ctx,
+                route,
+                (
+                    "active_key_select",
+                    widgets::key_selector_state_revision(&metas),
+                ),
+                &metas,
+            ) {
+                Ok(changed) => active_key_changed = changed,
+                Err(e) => active_key_error = Some(e),
+            }
+        });
+        if active_key_changed {
+            self.clear_messages();
+        }
+        if let Some(e) = active_key_error {
+            if let AppNotice::KeyfileQuarantined { .. } = e {
+                *route = Route::KeyfileSelect;
+                return;
+            }
+            self.msg.from_app_error(&e);
+        }
+
+        ui.add_space(8.0);
+
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 let dialog_width = ui.available_width().min(576.0);
-                widgets::panel_title(ui, "Key Registry");
-                ui.separator();
 
                 let current_active_id = lock_session(state).ok().and_then(|g| g.active_key_id);
-
-                let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
-
                 let active_meta = current_active_id.and_then(|id| metas.iter().find(|m| m.id == id));
 
                 let active_domain = active_meta.map(|m| m.domain.clone()).unwrap_or_default();
@@ -87,30 +121,6 @@ impl KeyRegistryPanel {
                     .unwrap_or_default();
 
                 let has_active_key = current_active_id.is_some();
-
-                let mut active_key_error: Option<AppNotice> = None;
-                ui.horizontal(|ui| {
-                    ui.label("Key:");
-                    if let Err(e) = widgets::active_key_selector(
-                        ui,
-                        state,
-                        ctx,
-                        route,
-                        "active_key_select",
-                        &metas,
-                    ) {
-                        active_key_error = Some(e);
-                    }
-                });
-                if let Some(e) = active_key_error {
-                    if let AppNotice::KeyfileQuarantined { .. } = e {
-                        *route = Route::KeyfileSelect;
-                        return;
-                    }
-                    self.msg.from_app_error(&e);
-                }
-
-                ui.add_space(6.0);
 
                 if has_active_key {
                     copyable_readonly_field(
@@ -227,7 +237,7 @@ impl KeyRegistryPanel {
                             ui.add_space(4.0);
                             crate::ui::widgets::ui_notice(
                                 ui,
-                                "Key standardization is currently disabled.\n\
+                                "Key standardization is currently disabled.
                             Be sure to record EXACTLY the text string used for domain. Otherwise, key recovery may be more difficult.",
                                 crate::ui::widgets::NoticeAlign::Left,
                             );
@@ -320,7 +330,7 @@ impl KeyRegistryPanel {
 
                         crate::ui::widgets::ui_notice(
                             ui,
-                            "DO NOT rely on this application as permanent key storage!\n\
+                            "DO NOT rely on this application as permanent key storage!
                         Create and securely store physical backups of your mnemonics and any associated meta-data. Otherwise, key recovery is impossible.",
                             crate::ui::widgets::NoticeAlign::Left,
                         );
@@ -346,11 +356,7 @@ impl KeyRegistryPanel {
                     self.confirm_uninstall = true;
                 }
 
-                // ==============================
-                // Confirm uninstall modal
-                // ==============================
                 if self.confirm_uninstall {
-                    // NOTE: `ui.ctx()` is the egui Context for the whole app.
                     egui::Window::new("Confirm uninstall")
                         .collapsible(false)
                         .resizable(false)

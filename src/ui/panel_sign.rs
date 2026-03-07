@@ -66,14 +66,27 @@ impl SignPanel {
         // Active key selector outside scroll area
         let metas = state.keys.lock().map(|g| g.clone()).unwrap_or_default();
         let mut active_key_error: Option<AppNotice> = None;
+        let mut active_key_changed = false;
         ui.horizontal(|ui| {
             ui.label("Key:");
-            if let Err(e) =
-                widgets::active_key_selector(ui, state, ctx, route, "sign_active_key", &metas)
-            {
-                active_key_error = Some(e);
+            match widgets::active_key_selector(
+                ui,
+                state,
+                ctx,
+                route,
+                (
+                    "sign_active_key",
+                    widgets::key_selector_state_revision(&metas),
+                ),
+                &metas,
+            ) {
+                Ok(changed) => active_key_changed = changed,
+                Err(e) => active_key_error = Some(e),
             }
         });
+        if active_key_changed {
+            self.clear_messages();
+        }
         if let Some(e) = active_key_error {
             if let AppNotice::KeyfileQuarantined { .. } = e {
                 *route = Route::KeyfileSelect;
